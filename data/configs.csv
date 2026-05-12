@@ -1,0 +1,242 @@
+id,configName,creatorsCategory,analysisInstruction,newConceptsInstruction
+4bfa69dd-35ab-405a-8089-dd1452059c4f,AI Blog Content,ai-creators,"Analyze this viral video and return ONLY the following fields, nothing else:
+
+**HOOK**
+The exact first 3-5 seconds of dialogue or text overlay, verbatim.
+
+**HOOK TYPE**
+One of: Bold Claim / Shock Stat / Question / Unexpected Twist / Reveal / Contrarian Take / Superlative
+
+**HOOK TEMPLATE**
+A niche-agnostic, plug-and-play version of the hook. Use [brackets] for every variable. Must be usable for any niche — beauty, finance, crypto, AI, lifestyle.
+
+**ESTIMATED DURATION**
+In seconds or minutes.
+
+**RETENTION MECHANIC**
+In 1-2 sentences: what specific moment or technique stops the viewer from scrolling mid-video?
+
+**SHAREABLE / SAVEABLE TRIGGER**
+In 1 sentence: why does someone send this to a friend or save it?
+
+**CTA**
+Explicit or implied. If none, write ""None.""
+
+**FORMAT**
+One of: Talking Head / Voiceover + Text / Dialogue / List Breakdown / Rant / News Explainer","Adapt this video for Oleg, who runs an AI blog and creates content about practical AI tools, automation workflows, and how to use AI to be more productive. His audience is tech-savvy professionals and entrepreneurs who want to leverage AI in their work.
+
+Task:
+Give us 3 NEW video concepts inspired by the ORIGINAL reference.
+Do not copy the original.
+Translate the core idea into the AI / automation / productivity context.
+MAINLY iterate and sharpen the HOOKS.
+
+Focus:
+- First 3 seconds must stop a tech-savvy professional from scrolling
+- Hooks should challenge a belief, expose a mistake, or promise a shortcut
+- Practical value > hype
+- Show, do not just tell
+- No buzzwords, no exaggeration
+
+The output should have this format:
+
+# CONCEPT 1
+Text description (1-3 sentences)
+
+## HOOK
+Detailed hook description (1-3 sentences)
+Describe:
+- What is seen in the first 2 seconds
+- What is said in the first line
+- Why this hook works for tech professionals
+
+## SCRIPT
+Detailed script description (1-20 sentences, as many as needed)
+Include:
+- Scene flow
+- Spoken text / voiceover
+- Clear practical payoff
+- Demonstration of the tool or workflow
+
+# CONCEPT 2
+...
+
+# CONCEPT 3
+..."
+9634c969-5eed-4545-8554-8694e7dfddbb,Crypto Finance Global,finance,"Analyze this viral video and return ONLY the following fields, nothing else:
+
+**HOOK**
+The exact first 3-5 seconds of dialogue or text overlay, verbatim.
+
+**HOOK TYPE**
+One of: Bold Claim / Shock Stat / Question / Unexpected Twist / Reveal / Contrarian Take / Superlative
+
+**HOOK TEMPLATE**
+A niche-agnostic, plug-and-play version of the hook. Use [brackets] for every variable. Must be usable for any niche — beauty, finance, crypto, AI, lifestyle.
+
+**ESTIMATED DURATION**
+In seconds or minutes.
+
+**RETENTION MECHANIC**
+In 1-2 sentences: what specific moment or technique stops the viewer from scrolling mid-video?
+
+**SHAREABLE / SAVEABLE TRIGGER**
+In 1 sentence: why does someone send this to a friend or save it?
+
+**CTA**
+Explicit or implied. If none, write ""None.""
+
+**FORMAT**
+One of: Talking Head / Voiceover + Text / Dialogue / List Breakdown / Rant / News Explainer","You are helping a crypto and finance content creator adapt viral competitor videos into original content ideas for their own channel.
+
+## CREATOR PROFILE
+- Niche: Crypto & Finance education and market intelligence
+- Tone: Direct, factual, journalistic — short punchy sentences, no hype
+- Audience: Serious crypto investors and aspiring investors, 25-40
+- Style: Builds tension through facts, delivers the reveal, ends with authority
+- Voice: Sounds like a trusted analyst, not a hype account
+
+## YOUR TASK
+Based on the competitor video analysis above, generate 3 original content concepts that:
+1. Use the SAME proven viral structure and hook type
+2. Apply it to a DIFFERENT crypto or finance topic (never copy the exact topic)
+3. Match the creator's direct, journalistic tone
+4. Include a specific data point, news event, or market insight that is genuinely interesting
+
+## FOR EACH CONCEPT PROVIDE:
+
+### Concept [Number]: [Working Title]
+**Hook (first 3 seconds):**
+[Exact opening line — short, punchy, stops the scroll]
+
+**Core Angle:**
+[The main insight or reveal — what will the viewer learn?]
+
+**Structure:**
+[How to build the video — opening / tension build / reveal / context / CTA]
+
+**Why this will perform:**
+[What emotional trigger it hits and why this audience will watch to the end]
+
+**Suggested topic examples:**
+[2-3 specific real-world examples or data points to use in the video]
+
+---
+
+Keep concepts realistic and grounded in actual market events, regulations, or on-chain data. No vague ideas — every concept should be ready to script immediately."
+bb2fa402-92dc-4aa2-874e-244c11b521f3,AI Creators,AI,"Analyze this viral video and return ONLY the following fields, nothing else:
+
+**HOOK**
+The exact first 3-5 seconds of dialogue or text overlay, verbatim.
+
+**HOOK TYPE**
+One of: Bold Claim / Shock Stat / Question / Unexpected Twist / Reveal / Contrarian Take / Superlative
+
+**HOOK TEMPLATE**
+A niche-agnostic, plug-and-play version of the hook. Use [brackets] for every variable. Must be usable for any niche — beauty, finance, crypto, AI, lifestyle.
+
+**ESTIMATED DURATION**
+In seconds or minutes.
+
+**RETENTION MECHANIC**
+In 1-2 sentences: what specific moment or technique stops the viewer from scrolling mid-video?
+
+**SHAREABLE / SAVEABLE TRIGGER**
+In 1 sentence: why does someone send this to a friend or save it?
+
+**CTA**
+Explicit or implied. If none, write ""None.""
+
+**FORMAT**
+One of: Talking Head / Voiceover + Text / Dialogue / List Breakdown / Rant / News Explainer",
+d9bb3317-26c0-4406-bbac-1f02d430018b,Format Viral Hunter,startup,"Analyze this viral video and return ONLY the following fields, nothing else:
+
+**HOOK**
+The exact first 3-5 seconds of dialogue or text overlay, verbatim.
+
+**HOOK TYPE**
+One of: Bold Claim / Shock Stat / Question / Unexpected Twist / Reveal / Contrarian Take / Superlative
+
+**HOOK TEMPLATE**
+A niche-agnostic, plug-and-play version of the hook. Use [brackets] for every variable. Must be usable for any niche — beauty, finance, crypto, AI, lifestyle.
+
+**ESTIMATED DURATION**
+In seconds or minutes.
+
+**RETENTION MECHANIC**
+In 1-2 sentences: what specific moment or technique stops the viewer from scrolling mid-video?
+
+**SHAREABLE / SAVEABLE TRIGGER**
+In 1 sentence: why does someone send this to a friend or save it?
+
+**CTA**
+Explicit or implied. If none, write ""None.""
+
+**FORMAT**
+One of: Talking Head / Voiceover + Text / Dialogue / List Breakdown / Rant / News Explainer",
+f7831174-804f-49aa-9d55-6bab3588df98,Beauty Vlogger,beauty,"Analyze this viral video and return ONLY the following fields, nothing else:
+
+**HOOK**
+The exact first 3-5 seconds of dialogue or text overlay, verbatim.
+
+**HOOK TYPE**
+One of: Bold Claim / Shock Stat / Question / Unexpected Twist / Reveal / Contrarian Take / Superlative
+
+**HOOK TEMPLATE**
+A niche-agnostic, plug-and-play version of the hook. Use [brackets] for every variable. Must be usable for any niche — beauty, finance, crypto, AI, lifestyle.
+
+**ESTIMATED DURATION**
+In seconds or minutes.
+
+**RETENTION MECHANIC**
+In 1-2 sentences: what specific moment or technique stops the viewer from scrolling mid-video?
+
+**SHAREABLE / SAVEABLE TRIGGER**
+In 1 sentence: why does someone send this to a friend or save it?
+
+**CTA**
+Explicit or implied. If none, write ""None.""
+
+**FORMAT**
+One of: Talking Head / Voiceover + Text / Dialogue / List Breakdown / Rant / News Explainer",
+234f2749-b7a2-43b2-97f8-bf0d3e62f308,Crypto Copy Paste,copypaste,"You are analyzing a viral crypto or finance video. Extract the 
+following in detail:
+
+## HOOK ANALYSIS
+- First 3 seconds: What exact words or visual opens the video? 
+What makes it stop the scroll?
+- Hook type: (Shocking stat / Contrarian take / Breaking news / 
+""Most people don't know"" / Question / Bold claim)
+
+## CONTENT STRUCTURE
+- Format: (Talking head / Voiceover + visuals / News breakdown / 
+Explainer / Story)
+- Pacing: (Fast cuts / Slow measured / Mixed)
+- Total estimated duration
+
+## CORE MESSAGE
+- What is the main claim or insight being delivered?
+- What problem or fear does it address for the viewer?
+- What is the aha moment that makes the viewer feel smarter 
+for watching?
+
+## RETENTION MECHANICS
+- How does the video maintain attention after the hook?
+- Are there pattern interrupts, text overlays, shocking stats, 
+or narrative tension?
+- What keeps the viewer from scrolling away at 5s, 15s, 30s?
+
+## SCRIPT BREAKDOWN
+- Write out the full spoken script word for word as best you can
+- Mark which lines are the hook, the build, the reveal, and the CTA
+
+## CTA
+- What is the exact call to action?
+- Where does it appear (end / middle / both)?
+
+## WHY IT WENT VIRAL
+- What emotional trigger does this hit? (Fear / Greed / Curiosity / 
+Outrage / Validation)
+- What made this shareable?
+- What is the single most powerful line in the entire video?",
+63560fe0-f5d2-4a7c-a12a-57f2f643f246,,,,

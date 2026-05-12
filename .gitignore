@@ -1,0 +1,62 @@
+# ─── Dependencies & build artifacts ──────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# ─── Secrets & local config ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Runtime data (SQLite + WAL) ─────────────────────────────────────────────
+data/*.db
+data/*.db-*
+data/browser-profile/
+data/cookies/
+data/outputs/
+
+# ─── Personal user content (committed creators / configs / prompts are kept) ─
+data/avatar.png
+data/avatars/
+data/voice-profile.json
+data/scripts.csv
+data/videos.csv
+data/nate-herk-*
+
+# ─── Generated outputs ───────────────────────────────────────────────────────
+outputs/
+tiktok-trends/
+social-media-main/
+
+# ─── OS & editor noise ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ─── Claude Code local workspace state (keep commands/ + skills/) ────────────
+**/.claude/worktrees/
+**/.claude/settings.local.json
+**/.claude/*.local.json
+
+# ─── One-off experiments not shipped with the app ────────────────────────────
+probe_*.py
+crypto-tiktok-trends-2026.html
+
+# ─── Playwright test artifacts ───────────────────────────────────────────────
+app/test-results/
+app/playwright-report/
+app/blob-report/
+app/playwright/.cache/
