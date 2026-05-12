@@ -74,10 +74,12 @@ export default function ScriptsPage() {
     loadScripts();
     fetch("/api/avatars")
       .then((r) => r.json())
-      .then((data: AvatarProfile[]) => {
-        setAvatars(data);
-        if (data.length > 0) setPickerSelectedAvatar(data[0].id);
-      });
+      .then((data: AvatarProfile[] | unknown) => {
+        const list = Array.isArray(data) ? data : [];
+        setAvatars(list);
+        if (list.length > 0) setPickerSelectedAvatar(list[0].id);
+      })
+      .catch(() => setAvatars([]));
     return () => {
       pollingRefs.current.forEach((interval) => clearInterval(interval));
     };

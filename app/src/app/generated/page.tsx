@@ -260,16 +260,20 @@ export default function GeneratedPage() {
   const loadScripts = useCallback(() => {
     fetch("/api/scripts")
       .then((r) => r.json())
-      .then((all: Script[]) => {
-        // Only show scripts that have been through video generation
+      .then((data: Script[] | unknown) => {
+        const all = Array.isArray(data) ? data : [];
         const generated = all.filter((s) => s.videoStatus && s.videoStatus !== "idle");
         setScripts(generated);
-      });
+      })
+      .catch(() => setScripts([]));
   }, []);
 
   useEffect(() => {
     loadScripts();
-    fetch("/api/avatars").then((r) => r.json()).then(setAvatars).catch(() => {});
+    fetch("/api/avatars")
+      .then((r) => r.json())
+      .then((d: unknown) => setAvatars(Array.isArray(d) ? d : []))
+      .catch(() => setAvatars([]));
 
     // Poll every 12s to refresh processing → completed transitions automatically
     pollingRef.current = setInterval(loadScripts, 12_000);

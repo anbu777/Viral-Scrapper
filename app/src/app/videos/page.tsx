@@ -152,20 +152,22 @@ function VideosContent() {
     fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])).catch(() => {});
     fetch("/api/avatars")
       .then((r) => r.json())
-      .then((data: AvatarProfile[]) => {
-        setAvatars(data);
-        if (data.length > 0) setPickerAvatarId(data[0].id);
-      });
+      .then((data: AvatarProfile[] | unknown) => {
+        const list = Array.isArray(data) ? data : [];
+        setAvatars(list);
+        if (list.length > 0) setPickerAvatarId(list[0].id);
+      })
+      .catch(() => setAvatars([]));
 
-    // Pre-load all scripts to restore status and track which videos already have scripts
     fetch("/api/scripts")
       .then((r) => r.json())
-      .then((scripts: Script[]) => {
-        // Which videos already have a regular script
-        const scripted = new Set(scripts.filter((s) => s.videoId && s.contentType !== "Video Clone").map((s) => s.videoId));
+      .then((data: Script[] | unknown) => {
+        const scripts = Array.isArray(data) ? data : [];
+        const scripted = new Set(
+          scripts.filter((s) => s.videoId && s.contentType !== "Video Clone").map((s) => s.videoId)
+        );
         setScriptedVideoIds(scripted);
 
-        // Restore video clone generation states
         const clones = scripts.filter((s) => s.contentType === "Video Clone" && s.videoId);
         const map: Record<string, VideoGenState> = {};
         for (const s of clones) {
@@ -180,6 +182,10 @@ function VideosContent() {
           }
         }
         setVideoGens(map);
+      })
+      .catch(() => {
+        setScriptedVideoIds(new Set());
+        setVideoGens({});
       });
 
     return () => {

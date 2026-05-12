@@ -153,12 +153,14 @@ export default function VoiceProfilePage() {
   useEffect(() => {
     fetch("/api/avatars")
       .then((r) => r.json())
-      .then((data: AvatarProfile[]) => {
-        setAvatars(data);
-        if (data.length > 0 && !selectedId) {
-          setSelectedId(data[0].id);
+      .then((data: AvatarProfile[] | unknown) => {
+        const list = Array.isArray(data) ? data : [];
+        setAvatars(list);
+        if (list.length > 0 && !selectedId) {
+          setSelectedId(list[0].id);
         }
-      });
+      })
+      .catch(() => setAvatars([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -168,11 +170,11 @@ export default function VoiceProfilePage() {
     setSaved(false);
     try {
       const [vpRes, refRes] = await Promise.all([
-        fetch(`/api/avatars/${id}/voice-profile`).then((r) => r.json()) as Promise<VoiceProfile>,
-        fetch(`/api/avatars/${id}/reference`).then((r) => r.json()) as Promise<string[]>,
+        fetch(`/api/avatars/${id}/voice-profile`).then((r) => r.json()).catch(() => null) as Promise<VoiceProfile | null>,
+        fetch(`/api/avatars/${id}/reference`).then((r) => r.json()).catch(() => []) as Promise<string[] | unknown>,
       ]);
-      setProfile(vpRes);
-      setRefImages(refRes);
+      setProfile(vpRes ?? emptyProfile);
+      setRefImages(Array.isArray(refRes) ? refRes : []);
     } finally {
       setLoading(false);
     }
@@ -212,8 +214,10 @@ export default function VoiceProfilePage() {
         await fetch(`/api/avatars/${selectedId}/reference`, { method: "POST", body: fd });
       }
       // Reload reference list
-      const updated = await fetch(`/api/avatars/${selectedId}/reference`).then((r) => r.json()) as string[];
-      setRefImages(updated);
+      const updated = await fetch(`/api/avatars/${selectedId}/reference`)
+        .then((r) => r.json())
+        .catch(() => []);
+      setRefImages(Array.isArray(updated) ? updated : []);
       setRefSaved(true);
       setTimeout(() => setRefSaved(false), 3000);
     } finally {

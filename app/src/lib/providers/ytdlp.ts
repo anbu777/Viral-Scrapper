@@ -19,8 +19,49 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Returns common install locations to search when yt-dlp isn't on PATH yet.
+ * This helps Windows users who just ran `winget install yt-dlp` without
+ * restarting the dev server (PATH refresh requires a new shell).
+ */
+function winFallbackPaths(): string[] {
+  if (process.platform !== "win32") return [];
+  const local = process.env.LOCALAPPDATA;
+  const programFiles = process.env["ProgramFiles"];
+  const candidates: string[] = [];
+  if (local) {
+    candidates.push(
+      path.join(
+        local,
+        "Microsoft",
+        "WinGet",
+        "Packages",
+        "yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "yt-dlp.exe"
+      ),
+      path.join(local, "Microsoft", "WinGet", "Links", "yt-dlp.exe"),
+      path.join(local, "Programs", "yt-dlp", "yt-dlp.exe")
+    );
+  }
+  if (programFiles) {
+    candidates.push(path.join(programFiles, "yt-dlp", "yt-dlp.exe"));
+  }
+  return candidates;
+}
+
+let cachedCommand: string | null = null;
+
 function getYtdlpCommand(): string {
-  return process.env.YTDLP_COMMAND?.trim() || "yt-dlp";
+  const fromEnv = process.env.YTDLP_COMMAND?.trim();
+  if (fromEnv) return fromEnv;
+  if (cachedCommand) return cachedCommand;
+  for (const candidate of winFallbackPaths()) {
+    if (existsSync(candidate)) {
+      cachedCommand = candidate;
+      return candidate;
+    }
+  }
+  return "yt-dlp";
 }
 
 export interface YtdlpMetadata {

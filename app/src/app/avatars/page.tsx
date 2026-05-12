@@ -328,15 +328,24 @@ export default function AvatarsPage() {
 
   const loadAvatars = async () => {
     setLoading(true);
-    const profiles: AvatarProfile[] = await fetch("/api/avatars").then((r) => r.json());
-    const withRefs = await Promise.all(
-      profiles.map(async (p) => {
-        const refs: string[] = await fetch(`/api/avatars/${p.id}/reference`).then((r) => r.json()).catch(() => []);
-        return { ...p, referenceImages: refs };
-      })
-    );
-    setAvatars(withRefs);
-    setLoading(false);
+    try {
+      const raw = await fetch("/api/avatars").then((r) => r.json());
+      const profiles: AvatarProfile[] = Array.isArray(raw) ? raw : [];
+      const withRefs = await Promise.all(
+        profiles.map(async (p) => {
+          const refsRaw = await fetch(`/api/avatars/${p.id}/reference`)
+            .then((r) => r.json())
+            .catch(() => []);
+          const refs: string[] = Array.isArray(refsRaw) ? refsRaw : [];
+          return { ...p, referenceImages: refs };
+        })
+      );
+      setAvatars(withRefs);
+    } catch {
+      setAvatars([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { void Promise.resolve().then(loadAvatars); }, []);

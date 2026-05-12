@@ -8,6 +8,7 @@ import { getInstagramProvider } from "@/lib/providers";
 import { migrateDb } from "@/db/migrate";
 import { getPgDrizzle } from "@/db/client-pg";
 import { pingGemini } from "@/lib/gemini";
+import { isYtdlpAvailable } from "@/lib/providers/ytdlp";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,7 +46,9 @@ export async function GET() {
       ? { ok: true, message: `ffmpeg bundled at ${ffmpegPath.path}` }
       : { ok: false, message: "Bundled ffmpeg not found." },
     playwright: await provider.validateSession(),
-    ytDlp: await commandHealth("yt-dlp"),
+    ytDlp: (await isYtdlpAvailable())
+      ? { ok: true, message: "yt-dlp is available (TikTok / YouTube Shorts ready)." }
+      : { ok: false, message: "yt-dlp not found. Install with `winget install yt-dlp` (Windows), `brew install yt-dlp` (macOS), or `pipx install yt-dlp` (Linux)." },
     whisper: await commandHealth(process.env.WHISPER_COMMAND || "whisper"),
     ollama: await fetch(`${env.OLLAMA_BASE_URL}/api/tags`).then(
       (res) => ({ ok: res.ok, message: res.ok ? "Ollama is reachable (optional)." : `Ollama returned ${res.status}` }),

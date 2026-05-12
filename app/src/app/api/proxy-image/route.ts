@@ -6,6 +6,13 @@ const ALLOWED_HOSTS = [
   "fna.fbcdn.net",
   "fal.media",
   "fal.ai",
+  "tiktokcdn.com",
+  "tiktokcdn-us.com",
+  "tiktokv.com",
+  "byteoversea.com",
+  "muscdn.com",
+  "ytimg.com",
+  "ggpht.com",
 ];
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 

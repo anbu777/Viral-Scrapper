@@ -35,17 +35,21 @@ export function PipelineProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
+      // Only forward keys that have explicit values so the server can apply
+      // env-based defaults (SCRAPER_PROVIDER, AI_PROVIDER, etc.) for the rest.
+      const payload: Record<string, unknown> = {
+        ...params,
+        freeMode: params.freeMode ?? true,
+      };
+      if (params.scraperProvider) payload.scraperProvider = params.scraperProvider;
+      if (params.aiProvider) payload.aiProvider = params.aiProvider;
+      if (params.transcriptProvider) payload.transcriptProvider = params.transcriptProvider;
+      if (params.videoProvider) payload.videoProvider = params.videoProvider;
+
       const response = await fetch("/api/pipeline/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...params,
-          freeMode: params.freeMode ?? true,
-          scraperProvider: params.scraperProvider || "local",
-          aiProvider: params.aiProvider || "gemini",
-          transcriptProvider: params.transcriptProvider || "gemini",
-          videoProvider: params.videoProvider || "none",
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(`Failed to create run (${response.status})`);
       const created = await response.json() as PipelineRun;

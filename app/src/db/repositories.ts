@@ -7,6 +7,7 @@ import * as sqlite from "./schema";
 import * as pg from "./schema-pg";
 import { parseJson, redactSensitive, stringifyJson } from "@/lib/json";
 import { getEnv, isPostgresDatabaseUrl } from "@/lib/env";
+import { cacheThumbnail } from "@/lib/thumbnail-cache";
 import type {
   Config,
   Creator,
@@ -401,12 +402,13 @@ export const repo = {
     }): Promise<Video | undefined> {
       const id = options.id || randomUUID();
       const now = new Date().toISOString();
+      const cachedThumbnail = await cacheThumbnail(reel.thumbnailUrl, id);
       const values = {
         id,
         platform: reel.platform,
         sourcePostUrl: reel.sourcePostUrl,
         shortcode: reel.shortcode,
-        thumbnail: reel.thumbnailUrl,
+        thumbnail: cachedThumbnail,
         creator: reel.creatorUsername,
         caption: reel.caption,
         views: reel.views,
@@ -430,7 +432,7 @@ export const repo = {
         await db.insert(pg.videos).values(values).onConflictDoUpdate({
           target: [pg.videos.platform, pg.videos.sourcePostUrl],
           set: {
-            thumbnail: reel.thumbnailUrl,
+            thumbnail: cachedThumbnail,
             creator: reel.creatorUsername,
             caption: reel.caption,
             views: reel.views,
@@ -451,7 +453,7 @@ export const repo = {
       db.insert(sqlite.videos).values(values).onConflictDoUpdate({
         target: [sqlite.videos.platform, sqlite.videos.sourcePostUrl],
         set: {
-          thumbnail: reel.thumbnailUrl,
+          thumbnail: cachedThumbnail,
           creator: reel.creatorUsername,
           caption: reel.caption,
           views: reel.views,
