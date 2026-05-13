@@ -177,10 +177,13 @@ export default function ImportPage() {
           <Info className="h-3.5 w-3.5" /> Multi-platform support
         </p>
         <p>
-          <strong>Instagram</strong> URLs are imported directly. Thumbnail and metadata are filled in by the analysis pipeline.
+          <strong>Instagram</strong>, <strong>TikTok</strong>, and <strong>YouTube Shorts</strong> can be enriched on import with{" "}
+          <code className="text-neon">yt-dlp</code> (thumbnail, stats, caption, and often a direct video URL for full Gemini analysis). Install:{" "}
+          <code className="text-neon">winget install yt-dlp</code> (Windows) or <code className="text-neon">brew install yt-dlp</code> (macOS). If yt-dlp cannot
+          fetch the media, the URL is still saved; analysis then falls back to caption/metadata only unless the pipeline can download the file.
         </p>
         <p>
-          <strong>TikTok</strong> and <strong>YouTube Shorts</strong> URLs are enriched via <code className="text-neon">yt-dlp</code> on import — thumbnails, captions, and view counts show up immediately. Install it: <code className="text-neon">winget install yt-dlp</code> (Windows) or <code className="text-neon">brew install yt-dlp</code> (macOS).
+          TikTok and YouTube Shorts typically show thumbnails immediately when <code className="text-neon">yt-dlp</code> succeeds.
         </p>
       </div>
     </div>

@@ -3,10 +3,9 @@
  *
  * Despite the historical path (`instagram-urls`), this endpoint accepts URLs
  * from Instagram, TikTok and YouTube Shorts. Each URL is auto-detected and
- * stored with the correct `platform` field. For TikTok/YouTube, if yt-dlp is
- * available, the import is enriched with the real thumbnail, caption,
- * uploader, and view count so the dashboard works immediately without
- * waiting for the analysis pipeline.
+ * stored with the correct `platform` field. When **yt-dlp** is installed, each URL
+ * (including **Instagram** reels) is passed through `getVideoMetadata` so thumbnails,
+ * stats, and a direct video URL are stored when the extractor succeeds.
  */
 
 import { NextResponse } from "next/server";
@@ -53,7 +52,8 @@ async function buildReel(
     rawProviderPayload: { manualImport: true, platform },
   };
 
-  if (platform === "instagram" || !ytdlpAvailable) return base;
+  /** TikTok / YouTube always need yt-dlp enrichment; Instagram can use it too when installed (direct video URL for Gemini). */
+  if (!ytdlpAvailable) return base;
 
   try {
     const meta = await getVideoMetadata(url);

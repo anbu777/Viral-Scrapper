@@ -34,6 +34,30 @@ function isAllowedUrl(raw: string) {
   return ALLOWED_HOSTS.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
 }
 
+/** Instagram / Facebook CDNs often return 403 without a same-site Referer. */
+function instagramFetchHeaders(targetUrl: string): Record<string, string> {
+  const parsed = new URL(targetUrl);
+  const host = parsed.hostname;
+  const isMetaCdn =
+    host.includes("cdninstagram.com") ||
+    host.includes("fbcdn.net") ||
+    host.endsWith(".cdninstagram.com");
+  const base: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+  if (isMetaCdn) {
+    base.Referer = "https://www.instagram.com/";
+    base.Origin = "https://www.instagram.com";
+    base["Sec-Fetch-Site"] = "cross-site";
+    base["Sec-Fetch-Mode"] = "no-cors";
+    base["Sec-Fetch-Dest"] = "image";
+  }
+  return base;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
@@ -48,9 +72,7 @@ export async function GET(request: Request) {
     }
 
     const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-      },
+      headers: instagramFetchHeaders(url),
     });
 
     if (!response.ok) {

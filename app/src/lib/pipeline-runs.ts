@@ -12,6 +12,7 @@ import { analyzeVideoToStructuredJson, transcribeVideoWithGemini } from "@/lib/g
 import { withBackoff } from "@/lib/retry";
 import { readVoiceProfile } from "@/lib/csv";
 import { transcribeWithProvider } from "@/lib/transcript-providers";
+import { downloadVideoToBuffer, isYtdlpAvailable } from "@/lib/providers/ytdlp";
 
 const running = new Set<string>();
 
@@ -78,49 +79,79 @@ async function analyzeOneVideo(
   let analysisStatus: Video["analysisStatus"] = "fallback";
   let newConceptsText = "";
 
-  const useGeminiMultimodal =
+  const geminiKeyOk = Boolean(process.env.GEMINI_API_KEY);
+  const wantsGeminiVideo =
     params.aiProvider === "gemini" &&
-    Boolean(process.env.GEMINI_API_KEY) &&
-    Boolean(video.videoFileUrl);
+    geminiKeyOk &&
+    (Boolean(video.videoFileUrl) || Boolean(video.link));
 
   try {
-    if (useGeminiMultimodal) {
-      const { buffer, contentType } = await withBackoff(() =>
-        logProviderCall(provider, "downloadVideo", { postUrl: video.link, videoFileUrl: video.videoFileUrl }, () =>
-          provider.downloadVideo({ postUrl: video.link, videoFileUrl: video.videoFileUrl })
-        )
-      );
-      const file = await withBackoff(() => uploadVideo(buffer, contentType));
+    let analysisFromVideo: VideoAnalysis | null = null;
+    let statusFromVideo: Video["analysisStatus"] = "fallback";
+    let transcriptFromVideo = transcript;
+    let conceptsFromVideo = "";
 
-      if (params.autoTranscript && params.transcriptProvider === "gemini") {
-        transcript = await withBackoff(() => transcribeVideoWithGemini(file.uri, file.mimeType));
-      } else if (params.autoTranscript && params.transcriptProvider === "whisper-local") {
-        transcript = await transcribeWithProvider({
-          provider: "whisper-local",
-          videoBuffer: buffer,
-          contentType,
-        });
+    if (wantsGeminiVideo) {
+      let buffer: Buffer | undefined;
+      let contentType: string | undefined;
+      try {
+        if (video.videoFileUrl) {
+          const downloaded = await withBackoff(() =>
+            logProviderCall(provider, "downloadVideo", { postUrl: video.link, videoFileUrl: video.videoFileUrl }, () =>
+              provider.downloadVideo({ postUrl: video.link, videoFileUrl: video.videoFileUrl })
+            )
+          );
+          buffer = downloaded.buffer;
+          contentType = downloaded.contentType;
+        } else if (video.link && (await isYtdlpAvailable())) {
+          const downloaded = await withBackoff(() => downloadVideoToBuffer(video.link));
+          buffer = downloaded.buffer;
+          contentType = downloaded.contentType;
+        }
+      } catch {
+        buffer = undefined;
       }
 
-      const structured = await withBackoff(() =>
-        analyzeVideoToStructuredJson({
-          fileUri: file.uri,
-          mimeType: file.mimeType,
-          analysisInstruction: config.analysisInstruction,
-        })
-      );
-      analysis = structured.analysis;
-      analysisStatus = structured.outcome === "ok" ? "ok" : "fallback";
+      if (buffer && contentType) {
+        const file = await withBackoff(() => uploadVideo(buffer, contentType));
 
-      if (config.newConceptsInstruction.trim()) {
-        try {
-          newConceptsText = await withBackoff(() =>
-            generateNewConcepts(JSON.stringify(analysis), config.newConceptsInstruction)
-          );
-        } catch {
-          newConceptsText = "";
+        if (params.autoTranscript && params.transcriptProvider === "gemini") {
+          transcriptFromVideo = await withBackoff(() => transcribeVideoWithGemini(file.uri, file.mimeType));
+        } else if (params.autoTranscript && params.transcriptProvider === "whisper-local") {
+          transcriptFromVideo = await transcribeWithProvider({
+            provider: "whisper-local",
+            videoBuffer: buffer,
+            contentType,
+          });
+        }
+
+        const structured = await withBackoff(() =>
+          analyzeVideoToStructuredJson({
+            fileUri: file.uri,
+            mimeType: file.mimeType,
+            analysisInstruction: config.analysisInstruction,
+          })
+        );
+        analysisFromVideo = structured.analysis;
+        statusFromVideo = structured.outcome === "ok" ? "ok" : "fallback";
+
+        if (config.newConceptsInstruction.trim()) {
+          try {
+            conceptsFromVideo = await withBackoff(() =>
+              generateNewConcepts(JSON.stringify(analysisFromVideo), config.newConceptsInstruction)
+            );
+          } catch {
+            conceptsFromVideo = "";
+          }
         }
       }
+    }
+
+    if (analysisFromVideo) {
+      analysis = analysisFromVideo;
+      analysisStatus = statusFromVideo;
+      transcript = transcriptFromVideo;
+      newConceptsText = conceptsFromVideo;
     } else {
       analysis = await analyzeWithProvider({
         provider: params.aiProvider!,

@@ -37,11 +37,19 @@ export default function RunPage() {
   const [autoVideos, setAutoVideos] = useState(true);
   const [resumeMode, setResumeMode] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const [envScraperProvider, setEnvScraperProvider] = useState<string | null>(null);
 
   const { running, progress, runPipeline } = usePipeline();
 
   useEffect(() => {
     fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/providers/health")
+      .then((r) => r.json())
+      .then((d: { env?: { scraperProvider?: string } }) => setEnvScraperProvider(d?.env?.scraperProvider ?? null))
+      .catch(() => setEnvScraperProvider(null));
   }, []);
 
   useEffect(() => {
@@ -84,6 +92,19 @@ export default function RunPage() {
           Analyze competitor content and generate new video concepts
         </p>
       </div>
+
+      {envScraperProvider === "manual" && !resumeMode && (
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-amber-100/90 leading-relaxed">
+          <p className="font-medium text-amber-200 mb-1">Scraper mode is <code className="text-neon">manual</code></p>
+          <p className="text-muted-foreground">
+            This run will <strong>not</strong> download new reels from your creators (scraping is disabled). You will see{" "}
+            <strong>0 videos</strong> unless you turn on <strong>Resume from saved videos</strong> to analyze URLs you already imported, or change{" "}
+            <code className="text-neon">SCRAPER_PROVIDER</code> to <code className="text-neon">apify</code>, <code className="text-neon">local</code>,{" "}
+            <code className="text-neon">tiktok</code>, or <code className="text-neon">youtube</code> in <code className="text-neon">.env</code>.{" "}
+            <Link href="/import" className="text-neon hover:underline">Manual Import</Link> is the usual entry point in free mode.
+          </p>
+        </div>
+      )}
 
       {/* Config Form */}
       <div className="glass rounded-2xl p-6 space-y-6">
