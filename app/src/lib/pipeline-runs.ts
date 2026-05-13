@@ -13,6 +13,7 @@ import { withBackoff } from "@/lib/retry";
 import { readVoiceProfile } from "@/lib/csv";
 import { transcribeWithProvider } from "@/lib/transcript-providers";
 import { downloadVideoToBuffer, isYtdlpAvailable } from "@/lib/providers/ytdlp";
+import { applySettingsToEnv, getProviderSettings } from "@/lib/app-settings";
 
 const running = new Set<string>();
 
@@ -39,10 +40,22 @@ async function runCancelled(runId: string): Promise<boolean> {
 }
 
 export async function createPipelineRun(params: PipelineParams) {
+  // Apply DB settings to process.env so provider modules see latest keys
+  await applySettingsToEnv();
+
   const env = getEnv();
+  const settings = await getProviderSettings();
+
+  // Smart provider selection based on settings + env
+  let effectiveScraperProvider = params.scraperProvider || env.SCRAPER_PROVIDER;
+  if (effectiveScraperProvider === "manual") {
+    // If user has Apify token in DB or env, prefer apify
+    const apifyToken = settings.scraping.instagram.apifyToken || process.env.APIFY_API_TOKEN;
+    if (apifyToken) effectiveScraperProvider = "apify";
+  }
   const normalized: PipelineParams = {
     ...params,
-    scraperProvider: params.scraperProvider || env.SCRAPER_PROVIDER,
+    scraperProvider: effectiveScraperProvider,
     aiProvider: params.aiProvider || env.AI_PROVIDER,
     transcriptProvider: params.transcriptProvider || env.TRANSCRIPT_PROVIDER,
     videoProvider: params.freeMode ? "none" : params.videoProvider || env.VIDEO_PROVIDER,
@@ -181,7 +194,7 @@ async function analyzeOneVideo(
       analysisJson: JSON.stringify(analysis),
     });
 
-    if (params.autoGenerateScripts && analysisStatus === "ok") {
+    if (params.autoGenerateScripts && (analysisStatus === "ok" || analysisStatus === "fallback")) {
       const variants = await generateScriptVariants({
         provider: params.aiProvider!,
         analysis,
@@ -284,6 +297,19 @@ export async function processPipelineRun(runId: string) {
       });
     } else {
       const creators = await repo.creators.list(config.creatorsCategory);
+      if (creators.length === 0) {
+        const allCreators = await repo.creators.list();
+        const categories = [...new Set(allCreators.map(c => c.category))];
+        const errorMsg = `No creators found for category "${config.creatorsCategory}". Available categories: ${categories.join(", ") || "none"}. Add creators with this category first.`;
+        await repo.runs.addError(runId, { code: "VALIDATION_ERROR", message: errorMsg });
+        await repo.runs.update(runId, {
+          status: "failed",
+          completedAt: new Date().toISOString(),
+          progress: { phase: "failed", completed: 0, total: 0 },
+        });
+        running.delete(runId);
+        return;
+      }
       await repo.runs.update(runId, {
         progress: { phase: "scraping", completed: 0, total: creators.length },
       });
@@ -381,7 +407,18 @@ export async function processPipelineRun(runId: string) {
         selectedVideos.map((video) =>
           limit(async () => {
             if (await runCancelled(runId)) return;
-            await analyzeOneVideo(runId, video, config, params);
+            try {
+              await analyzeOneVideo(runId, video, config, params);
+            } catch (err) {
+              // Safety catch — analyzeOneVideo should handle its own errors,
+              // but if something unexpected leaks, log it and continue
+              console.error(`[pipeline] Unhandled error analyzing ${video.link}:`, err);
+              await repo.runs.addError(runId, {
+                code: classifyProviderError(err),
+                message: err instanceof Error ? err.message : String(err),
+                target: video.link,
+              }).catch(() => {});
+            }
             await bumpAnalyzed();
           })
         )

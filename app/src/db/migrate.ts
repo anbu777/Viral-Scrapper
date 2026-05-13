@@ -193,6 +193,93 @@ const statements = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS creator_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    canonical_username TEXT NOT NULL,
+    avatar_url TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS scheduler_jobs (
+    id TEXT PRIMARY KEY,
+    creator_id TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    interval_minutes INTEGER NOT NULL DEFAULT 360,
+    last_run_at TEXT,
+    next_run_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'idle',
+    last_error TEXT,
+    consecutive_errors INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(creator_id) REFERENCES creators(id)
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS scheduler_jobs_creator_platform_idx ON scheduler_jobs(creator_id, platform)`,
+  `CREATE TABLE IF NOT EXISTS viral_alerts (
+    id TEXT PRIMARY KEY,
+    video_id TEXT NOT NULL,
+    creator_id TEXT,
+    creator_username TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    virality_score REAL NOT NULL,
+    threshold_used REAL NOT NULL,
+    score_breakdown_json TEXT NOT NULL DEFAULT '{}',
+    seen INTEGER NOT NULL DEFAULT 0,
+    notified INTEGER NOT NULL DEFAULT 0,
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(video_id) REFERENCES videos(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS scheduler_runs (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    videos_found INTEGER NOT NULL DEFAULT 0,
+    viral_detected INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(job_id) REFERENCES scheduler_jobs(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS content_calendar (
+    id TEXT PRIMARY KEY,
+    script_id TEXT,
+    scheduled_date TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    posted_url TEXT,
+    notes TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS posted_content (
+    id TEXT PRIMARY KEY,
+    script_id TEXT,
+    posted_url TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    posted_at TEXT NOT NULL,
+    views_24h INTEGER NOT NULL DEFAULT 0,
+    views_48h INTEGER NOT NULL DEFAULT 0,
+    views_7d INTEGER NOT NULL DEFAULT 0,
+    likes_7d INTEGER NOT NULL DEFAULT 0,
+    comments_7d INTEGER NOT NULL DEFAULT 0,
+    last_checked_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS intelligence_reports (
+    id TEXT PRIMARY KEY,
+    config_name TEXT NOT NULL DEFAULT '',
+    period_from TEXT NOT NULL,
+    period_to TEXT NOT NULL,
+    report_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
 ];
 
 function migrateSqliteIncrementalColumns() {
@@ -212,6 +299,27 @@ function migrateSqliteIncrementalColumns() {
   const creatorNames = new Set(creatorCols.map((c) => c.name));
   if (!creatorNames.has("aliases")) {
     db.exec(`ALTER TABLE creators ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'`);
+  }
+  if (!creatorNames.has("group_id")) {
+    db.exec(`ALTER TABLE creators ADD COLUMN group_id TEXT`);
+  }
+  // Add script versioning + A/B testing columns
+  const scriptCols = db.prepare("PRAGMA table_info(scripts)").all() as { name: string }[];
+  const scriptNames = new Set(scriptCols.map((c) => c.name));
+  if (!scriptNames.has("parent_script_id")) {
+    db.exec(`ALTER TABLE scripts ADD COLUMN parent_script_id TEXT`);
+  }
+  if (!scriptNames.has("version")) {
+    db.exec(`ALTER TABLE scripts ADD COLUMN version INTEGER NOT NULL DEFAULT 1`);
+  }
+  if (!scriptNames.has("ab_group")) {
+    db.exec(`ALTER TABLE scripts ADD COLUMN ab_group TEXT`);
+  }
+  if (!scriptNames.has("performance_views")) {
+    db.exec(`ALTER TABLE scripts ADD COLUMN performance_views INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!scriptNames.has("performance_tracked_at")) {
+    db.exec(`ALTER TABLE scripts ADD COLUMN performance_tracked_at TEXT`);
   }
 }
 

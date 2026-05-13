@@ -39,53 +39,77 @@ export async function scrapeReels(
     .toISOString()
     .slice(0, 10);
 
-  const response = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        addParentData: false,
-        directUrls: [`https://www.instagram.com/${username}/reels/`],
-        enhanceUserSearchWithFacebookPage: false,
-        isUserReelFeedURL: true,
-        isUserTaggedFeedURL: false,
-        onlyPostsNewerThan: sinceDate,
-        resultsLimit: maxVideos,
-        resultsType: "posts",
-      }),
+  // Retry up to 2 times for transient network failures
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(
+        `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256&timeout=120`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addParentData: false,
+            directUrls: [`https://www.instagram.com/${username}/reels/`],
+            enhanceUserSearchWithFacebookPage: false,
+            isUserReelFeedURL: true,
+            isUserTaggedFeedURL: false,
+            onlyPostsNewerThan: sinceDate,
+            resultsLimit: maxVideos,
+            resultsType: "posts",
+          }),
+          signal: AbortSignal.timeout(180_000), // 3 minute client-side timeout
+        }
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Apify error ${response.status}: ${text.slice(0, 300)}`);
+      }
+
+      const data = await response.json();
+      return data as ApifyReel[];
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message.toLowerCase();
+      // Only retry on network/timeout errors, not on 4xx client errors
+      if (/fetch failed|timeout|econnreset|econnrefused|socket|abort/i.test(msg)) {
+        console.warn(`[apify] scrapeReels attempt ${attempt + 1} failed for @${username}: ${lastError.message}. Retrying...`);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 3000 * (attempt + 1)));
+        continue;
+      }
+      throw lastError;
     }
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Apify error ${response.status}: ${text}`);
   }
-
-  const data = await response.json();
-  return data as ApifyReel[];
+  throw lastError || new Error(`Apify scrapeReels failed for @${username} after 3 attempts`);
 }
 
 export async function refreshVideoUrl(postUrl: string): Promise<string | null> {
   const token = getToken();
-  const response = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        directUrls: [postUrl],
-        resultsType: "posts",
-        resultsLimit: 1,
-      }),
+  try {
+    const response = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256&timeout=60`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directUrls: [postUrl],
+          resultsType: "posts",
+          resultsLimit: 1,
+        }),
+        signal: AbortSignal.timeout(90_000),
+      }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Apify refresh error ${response.status}: ${text.slice(0, 300)}`);
     }
-  );
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Apify refresh error ${response.status}: ${text.slice(0, 300)}`);
+    const data = await response.json() as ApifyReel[];
+    return data[0]?.videoUrl || null;
+  } catch (err) {
+    console.warn(`[apify] refreshVideoUrl failed for ${postUrl}: ${err instanceof Error ? err.message : err}`);
+    return null;
   }
-  const data = await response.json() as ApifyReel[];
-  return data[0]?.videoUrl || null;
 }
 
 export async function scrapeCreatorStats(username: string): Promise<CreatorStats> {
@@ -93,7 +117,7 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
 
   // 1. Get profile info (details mode)
   const profileRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256`,
+    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256&timeout=60`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,12 +126,13 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
         resultsType: "details",
         resultsLimit: 1,
       }),
+      signal: AbortSignal.timeout(90_000),
     }
   );
 
   if (!profileRes.ok) {
     const text = await profileRes.text();
-    throw new Error(`Apify profile error ${profileRes.status}: ${text}`);
+    throw new Error(`Apify profile error ${profileRes.status}: ${text.slice(0, 300)}`);
   }
 
   const profileData = await profileRes.json() as ApifyProfileResult[];
@@ -121,7 +146,7 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
     .slice(0, 10);
 
   const postsRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256`,
+    `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&memory=256&timeout=120`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,12 +158,13 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
         addParentData: false,
         isUserReelFeedURL: true,
       }),
+      signal: AbortSignal.timeout(180_000),
     }
   );
 
   if (!postsRes.ok) {
     const text = await postsRes.text();
-    throw new Error(`Apify posts error ${postsRes.status}: ${text}`);
+    throw new Error(`Apify posts error ${postsRes.status}: ${text.slice(0, 300)}`);
   }
 
   const posts = await postsRes.json() as ApifyReel[];

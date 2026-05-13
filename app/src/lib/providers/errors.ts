@@ -12,13 +12,15 @@ export class ProviderError extends Error {
 
 export function classifyProviderError(error: unknown): ProviderErrorCode {
   if (error instanceof ProviderError) return error.code;
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const message = typeof raw === "string" ? raw.toLowerCase() : "";
   if (message.includes("token") || message.includes("unauthorized") || message.includes("login")) return "PROVIDER_AUTH";
   if (message.includes("rate") || message.includes("429")) return "RATE_LIMIT";
   if (message.includes("expired") || message.includes("cdn")) return "MEDIA_EXPIRED";
   if (message.includes("private") || message.includes("deleted") || message.includes("404")) return "PRIVATE_OR_DELETED";
-  if (message.includes("schema") || message.includes("json")) return "AI_SCHEMA_INVALID";
+  if (message.includes("schema") || message.includes("json") || message.includes("no json object")) return "AI_SCHEMA_INVALID";
   if (message.includes("gemini") || message.includes("ollama") || message.includes("claude")) return "AI_PROVIDER_ERROR";
   if (message.includes("invalid") || message.includes("required")) return "VALIDATION_ERROR";
+  if (message.includes("fetch failed") || message.includes("econnreset") || message.includes("timeout") || message.includes("econnrefused") || message.includes("abort")) return "RATE_LIMIT";
   return "UNKNOWN";
 }

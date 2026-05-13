@@ -32,6 +32,7 @@ export const ScriptVariantSchema = z.object({
 const stopwords = new Set(["the", "a", "an", "and", "or", "to", "of", "in", "is", "it", "for", "you", "i", "this", "that"]);
 
 function tokens(text: string) {
+  if (!text || typeof text !== "string") return [];
   return text.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => !stopwords.has(token)) ?? [];
 }
 
@@ -79,7 +80,21 @@ export function scoreScript(script: GeneratedScriptVariant, sourceTranscript: st
 }
 
 export function normalizeAnalysis(input: unknown): VideoAnalysis {
-  return VideoAnalysisSchema.parse(input);
+  const parsed = VideoAnalysisSchema.parse(input);
+  // Ensure all string fields are actually strings (not null/undefined that slipped through)
+  return {
+    hook: String(parsed.hook || ""),
+    summary: String(parsed.summary || ""),
+    transcript: String(parsed.transcript || ""),
+    ocrText: String(parsed.ocrText || ""),
+    visualPattern: String(parsed.visualPattern || ""),
+    pacing: String(parsed.pacing || ""),
+    formatPattern: String(parsed.formatPattern || ""),
+    audience: String(parsed.audience || ""),
+    viralMechanics: Array.isArray(parsed.viralMechanics) ? parsed.viralMechanics.map(String) : [],
+    riskFlags: Array.isArray(parsed.riskFlags) ? parsed.riskFlags.map(String) : [],
+    sourceEvidence: Array.isArray(parsed.sourceEvidence) ? parsed.sourceEvidence.map(String) : [],
+  };
 }
 
 export function makeFallbackAnalysis(transcript = "", summary = ""): VideoAnalysis {

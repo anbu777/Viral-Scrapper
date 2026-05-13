@@ -61,7 +61,7 @@ export async function uploadVideo(
   return { uri: fileUri, mimeType: fileMimeType };
 }
 
-async function waitForFileActive(fileName: string, maxWaitMs = 120000): Promise<void> {
+async function waitForFileActive(fileName: string, maxWaitMs = 300000): Promise<void> {
   const key = getApiKey();
   const start = Date.now();
 
@@ -71,7 +71,7 @@ async function waitForFileActive(fileName: string, maxWaitMs = 120000): Promise<
     );
 
     if (!response.ok) {
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 4000));
       continue;
     }
 
@@ -81,8 +81,8 @@ async function waitForFileActive(fileName: string, maxWaitMs = 120000): Promise<
     if (state === "ACTIVE") return;
     if (state === "FAILED") throw new Error(`Gemini file processing failed for ${fileName}`);
 
-    // Still PROCESSING — wait and retry
-    await new Promise((r) => setTimeout(r, 3000));
+    // Still PROCESSING — wait and retry (poll every 5s for large files)
+    await new Promise((r) => setTimeout(r, 5000));
   }
 
   throw new Error(`Gemini file ${fileName} did not become ACTIVE within ${maxWaitMs / 1000}s`);

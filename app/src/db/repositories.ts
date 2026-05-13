@@ -11,13 +11,19 @@ import { cacheThumbnail } from "@/lib/thumbnail-cache";
 import type {
   Config,
   Creator,
+  CreatorGroup,
   PipelineParams,
   PipelineRun,
   ProviderErrorCode,
   ProviderLog,
+  SchedulerJob,
   Script,
   ScrapedReel,
   Video,
+  ViralAlert,
+  ContentCalendarEntry,
+  PostedContent,
+  IntelligenceReport,
 } from "@/lib/types";
 
 function isPostgresMode() {
@@ -44,6 +50,7 @@ function rowToCreator(row: {
   avgViews30d: number;
   lastScrapedAt: string;
   aliases?: string;
+  groupId?: string | null;
 }): Creator {
   // Explicitly recognize valid platforms; everything else falls back to instagram
   const validPlatforms: string[] = ["tiktok", "youtube_shorts"];
@@ -64,6 +71,7 @@ function rowToCreator(row: {
     avgViews30d: row.avgViews30d,
     lastScrapedAt: row.lastScrapedAt,
     aliases: aliases.length > 0 ? aliases : undefined,
+    groupId: row.groupId ?? null,
   };
 }
 
@@ -193,6 +201,11 @@ function rowToScript(row: typeof sqlite.scripts.$inferSelect | typeof pg.scripts
     videoMode: (row.videoMode as Script["videoMode"]) || undefined,
     videoProvider: (row.videoProvider as Script["videoProvider"]) || undefined,
     sourceVideoUrl: row.sourceVideoUrl ?? undefined,
+    parentScriptId: (row as { parentScriptId?: string | null }).parentScriptId ?? null,
+    version: (row as { version?: number }).version ?? 1,
+    abGroup: (row as { abGroup?: string | null }).abGroup ?? null,
+    performanceViews: (row as { performanceViews?: number }).performanceViews ?? 0,
+    performanceTrackedAt: (row as { performanceTrackedAt?: string | null }).performanceTrackedAt ?? null,
   };
 }
 
@@ -233,15 +246,27 @@ export const repo = {
     async list(category?: string): Promise<Creator[]> {
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
-        const rows = category
-          ? await db.select().from(pg.creators).where(eq(pg.creators.category, category))
-          : await db.select().from(pg.creators);
+        let rows;
+        if (category) {
+          // Case-insensitive category matching
+          rows = await db.select().from(pg.creators);
+          const lowerCat = category.toLowerCase();
+          rows = rows.filter((row) => row.category.toLowerCase() === lowerCat);
+        } else {
+          rows = await db.select().from(pg.creators);
+        }
         return rows.map(rowToCreator);
       }
       const db = ensureSqlite();
-      const rows = category
-        ? db.select().from(sqlite.creators).where(eq(sqlite.creators.category, category)).all()
-        : db.select().from(sqlite.creators).all();
+      let rows;
+      if (category) {
+        // Case-insensitive category matching
+        const allRows = db.select().from(sqlite.creators).all();
+        const lowerCat = category.toLowerCase();
+        rows = allRows.filter((row) => row.category.toLowerCase() === lowerCat);
+      } else {
+        rows = db.select().from(sqlite.creators).all();
+      }
       return rows.map(rowToCreator);
     },
     async upsert(creator: Creator): Promise<Creator> {
@@ -313,6 +338,7 @@ export const repo = {
       if (updates.avgViews30d !== undefined) patch.avgViews30d = updates.avgViews30d;
       if (updates.lastScrapedAt !== undefined) patch.lastScrapedAt = updates.lastScrapedAt;
       if (updates.aliases !== undefined) patch.aliases = JSON.stringify(updates.aliases);
+      if (updates.groupId !== undefined) patch.groupId = updates.groupId;
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
         await db.update(pg.creators).set(patch as Record<string, never>).where(eq(pg.creators.id, id));
@@ -433,11 +459,11 @@ export const repo = {
         datePosted: reel.postedAt ? reel.postedAt.slice(0, 10) : "",
         dateAdded: today(),
         configName: options.configName || "",
-        scrapeRunId: options.scrapeRunId,
+        scrapeRunId: options.scrapeRunId ?? null,
         provider: options.provider,
         selectedForAnalysis: options.selectedForAnalysis ?? false,
-        duration: reel.durationSeconds,
-        videoFileUrl: reel.videoFileUrl,
+        duration: reel.durationSeconds ?? null,
+        videoFileUrl: reel.videoFileUrl ?? null,
         viralityScore: options.viralityScore ?? 0,
         rankingReason: options.rankingReason ?? "",
         scoreBreakdownJson: stringifyJson(options.scoreBreakdown ?? {}),
@@ -555,18 +581,23 @@ export const repo = {
           contentType: script.contentType || "",
           dateGenerated: script.dateGenerated || today(),
           starred: script.starred || false,
-          videoJobId: script.videoJobId,
-          videoStatus: script.videoStatus,
-          videoUrl: script.videoUrl,
-          geminiCheck: script.geminiCheck,
-          claudeCheck: script.claudeCheck,
-          imagePrompt: script.imagePrompt,
-          videoPrompt: script.videoPrompt,
-          avatarId: script.avatarId,
-          generatedImageUrl: script.generatedImageUrl,
-          videoMode: script.videoMode,
-          videoProvider: script.videoProvider,
-          sourceVideoUrl: script.sourceVideoUrl,
+          videoJobId: script.videoJobId ?? null,
+          videoStatus: script.videoStatus ?? null,
+          videoUrl: script.videoUrl ?? null,
+          geminiCheck: script.geminiCheck ?? null,
+          claudeCheck: script.claudeCheck ?? null,
+          imagePrompt: script.imagePrompt ?? null,
+          videoPrompt: script.videoPrompt ?? null,
+          avatarId: script.avatarId ?? null,
+          generatedImageUrl: script.generatedImageUrl ?? null,
+          videoMode: script.videoMode ?? null,
+          videoProvider: script.videoProvider ?? null,
+          sourceVideoUrl: script.sourceVideoUrl ?? null,
+          parentScriptId: script.parentScriptId ?? null,
+          version: script.version ?? 1,
+          abGroup: script.abGroup ?? null,
+          performanceViews: script.performanceViews ?? 0,
+          performanceTrackedAt: script.performanceTrackedAt ?? null,
         }).onConflictDoUpdate({
           target: [pg.scripts.videoId, pg.scripts.scriptVariant, pg.scripts.generationRunId],
           set: {
@@ -602,18 +633,23 @@ export const repo = {
         contentType: script.contentType || "",
         dateGenerated: script.dateGenerated || today(),
         starred: script.starred || false,
-        videoJobId: script.videoJobId,
-        videoStatus: script.videoStatus,
-        videoUrl: script.videoUrl,
-        geminiCheck: script.geminiCheck,
-        claudeCheck: script.claudeCheck,
-        imagePrompt: script.imagePrompt,
-        videoPrompt: script.videoPrompt,
-        avatarId: script.avatarId,
-        generatedImageUrl: script.generatedImageUrl,
-        videoMode: script.videoMode,
-        videoProvider: script.videoProvider,
-        sourceVideoUrl: script.sourceVideoUrl,
+        videoJobId: script.videoJobId ?? null,
+        videoStatus: script.videoStatus ?? null,
+        videoUrl: script.videoUrl ?? null,
+        geminiCheck: script.geminiCheck ?? null,
+        claudeCheck: script.claudeCheck ?? null,
+        imagePrompt: script.imagePrompt ?? null,
+        videoPrompt: script.videoPrompt ?? null,
+        avatarId: script.avatarId ?? null,
+        generatedImageUrl: script.generatedImageUrl ?? null,
+        videoMode: script.videoMode ?? null,
+        videoProvider: script.videoProvider ?? null,
+        sourceVideoUrl: script.sourceVideoUrl ?? null,
+        parentScriptId: script.parentScriptId ?? null,
+        version: script.version ?? 1,
+        abGroup: script.abGroup ?? null,
+        performanceViews: script.performanceViews ?? 0,
+        performanceTrackedAt: script.performanceTrackedAt ?? null,
       }).onConflictDoUpdate({
         target: [sqlite.scripts.videoId, sqlite.scripts.scriptVariant, sqlite.scripts.generationRunId],
         set: {
@@ -642,6 +678,9 @@ export const repo = {
       if ("videoMode" in updates) patch.videoMode = updates.videoMode ?? null;
       if ("videoProvider" in updates) patch.videoProvider = updates.videoProvider ?? null;
       if ("sourceVideoUrl" in updates) patch.sourceVideoUrl = updates.sourceVideoUrl ?? null;
+      if ("abGroup" in updates) patch.abGroup = updates.abGroup ?? null;
+      if ("performanceViews" in updates) patch.performanceViews = updates.performanceViews ?? 0;
+      if ("performanceTrackedAt" in updates) patch.performanceTrackedAt = updates.performanceTrackedAt ?? null;
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
         await db.update(pg.scripts).set(patch as Record<string, never>).where(eq(pg.scripts.id, id));
@@ -866,6 +905,513 @@ export const repo = {
         out.push(...ensureSqlite().select().from(sqlite.analysisRuns).where(eq(sqlite.analysisRuns.videoId, vid)).all());
       }
       return out;
+    },
+  },
+  creatorGroups: {
+    async list(): Promise<CreatorGroup[]> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        const rows = await db.select().from(pg.creatorGroups);
+        return rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          canonicalUsername: r.canonicalUsername,
+          avatarUrl: r.avatarUrl,
+          notes: r.notes,
+        }));
+      }
+      const rows = ensureSqlite().select().from(sqlite.creatorGroups).all();
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        canonicalUsername: r.canonicalUsername,
+        avatarUrl: r.avatarUrl,
+        notes: r.notes,
+      }));
+    },
+    async get(id: string): Promise<CreatorGroup | undefined> {
+      const all = await this.list();
+      return all.find((g) => g.id === id);
+    },
+    async create(input: Omit<CreatorGroup, "id">): Promise<CreatorGroup> {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        name: input.name,
+        canonicalUsername: input.canonicalUsername,
+        avatarUrl: input.avatarUrl || "",
+        notes: input.notes || "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.creatorGroups).values(row);
+      } else {
+        ensureSqlite().insert(sqlite.creatorGroups).values(row).run();
+      }
+      return { id, ...input };
+    },
+    async update(id: string, updates: Partial<CreatorGroup>): Promise<void> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (updates.name !== undefined) patch.name = updates.name;
+      if (updates.canonicalUsername !== undefined) patch.canonicalUsername = updates.canonicalUsername;
+      if (updates.avatarUrl !== undefined) patch.avatarUrl = updates.avatarUrl;
+      if (updates.notes !== undefined) patch.notes = updates.notes;
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.update(pg.creatorGroups).set(patch as Record<string, never>).where(eq(pg.creatorGroups.id, id));
+        return;
+      }
+      ensureSqlite().update(sqlite.creatorGroups).set(patch as Record<string, never>).where(eq(sqlite.creatorGroups.id, id)).run();
+    },
+    async delete(id: string): Promise<void> {
+      // Unlink all creators in this group first
+      const allCreators = await repo.creators.list();
+      for (const creator of allCreators.filter((c) => c.groupId === id)) {
+        await repo.creators.update(creator.id, { groupId: null });
+      }
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.creatorGroups).where(eq(pg.creatorGroups.id, id));
+        return;
+      }
+      ensureSqlite().delete(sqlite.creatorGroups).where(eq(sqlite.creatorGroups.id, id)).run();
+    },
+  },
+  schedulerJobs: {
+    async list(): Promise<SchedulerJob[]> {
+      const rows = isPostgresMode()
+        ? await (await getPgDrizzle()).select().from(pg.schedulerJobs)
+        : ensureSqlite().select().from(sqlite.schedulerJobs).all();
+      return rows.map((r) => ({
+        id: r.id,
+        creatorId: r.creatorId,
+        platform: r.platform as SchedulerJob["platform"],
+        intervalMinutes: r.intervalMinutes,
+        lastRunAt: r.lastRunAt,
+        nextRunAt: r.nextRunAt,
+        status: r.status as SchedulerJob["status"],
+        lastError: r.lastError,
+        consecutiveErrors: r.consecutiveErrors,
+        enabled: r.enabled,
+      }));
+    },
+    async listDue(): Promise<SchedulerJob[]> {
+      const all = await this.list();
+      const now = new Date().toISOString();
+      return all.filter((j) => j.enabled && j.status !== "running" && j.nextRunAt <= now);
+    },
+    async upsert(job: Omit<SchedulerJob, "id">, existingId?: string): Promise<SchedulerJob> {
+      const id = existingId || randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        creatorId: job.creatorId,
+        platform: job.platform,
+        intervalMinutes: job.intervalMinutes,
+        lastRunAt: job.lastRunAt ?? null,
+        nextRunAt: job.nextRunAt,
+        status: job.status,
+        lastError: job.lastError ?? null,
+        consecutiveErrors: job.consecutiveErrors,
+        enabled: job.enabled,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.schedulerJobs).values(row).onConflictDoUpdate({
+          target: [pg.schedulerJobs.creatorId, pg.schedulerJobs.platform],
+          set: {
+            intervalMinutes: job.intervalMinutes,
+            nextRunAt: job.nextRunAt,
+            status: job.status,
+            enabled: job.enabled,
+            updatedAt: now,
+          },
+        });
+      } else {
+        ensureSqlite().insert(sqlite.schedulerJobs).values(row).onConflictDoUpdate({
+          target: [sqlite.schedulerJobs.creatorId, sqlite.schedulerJobs.platform],
+          set: {
+            intervalMinutes: job.intervalMinutes,
+            nextRunAt: job.nextRunAt,
+            status: job.status,
+            enabled: job.enabled,
+            updatedAt: now,
+          },
+        }).run();
+      }
+      return { id, ...job };
+    },
+    async update(id: string, updates: Partial<SchedulerJob>): Promise<void> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (updates.intervalMinutes !== undefined) patch.intervalMinutes = updates.intervalMinutes;
+      if (updates.lastRunAt !== undefined) patch.lastRunAt = updates.lastRunAt;
+      if (updates.nextRunAt !== undefined) patch.nextRunAt = updates.nextRunAt;
+      if (updates.status !== undefined) patch.status = updates.status;
+      if (updates.lastError !== undefined) patch.lastError = updates.lastError;
+      if (updates.consecutiveErrors !== undefined) patch.consecutiveErrors = updates.consecutiveErrors;
+      if (updates.enabled !== undefined) patch.enabled = updates.enabled;
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.update(pg.schedulerJobs).set(patch as Record<string, never>).where(eq(pg.schedulerJobs.id, id));
+        return;
+      }
+      ensureSqlite().update(sqlite.schedulerJobs).set(patch as Record<string, never>).where(eq(sqlite.schedulerJobs.id, id)).run();
+    },
+    async delete(id: string): Promise<void> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.schedulerJobs).where(eq(pg.schedulerJobs.id, id));
+        return;
+      }
+      ensureSqlite().delete(sqlite.schedulerJobs).where(eq(sqlite.schedulerJobs.id, id)).run();
+    },
+  },
+  viralAlerts: {
+    async list(filters?: { unseen?: boolean; dismissed?: boolean }): Promise<ViralAlert[]> {
+      const rows = isPostgresMode()
+        ? await (await getPgDrizzle()).select().from(pg.viralAlerts)
+        : ensureSqlite().select().from(sqlite.viralAlerts).all();
+      const mapped = rows.map((r) => ({
+        id: r.id,
+        videoId: r.videoId,
+        creatorId: r.creatorId,
+        creatorUsername: r.creatorUsername,
+        platform: r.platform as ViralAlert["platform"],
+        viralityScore: r.viralityScore,
+        thresholdUsed: r.thresholdUsed,
+        scoreBreakdown: parseJson(r.scoreBreakdownJson, {}),
+        seen: r.seen,
+        notified: r.notified,
+        dismissed: r.dismissed,
+        createdAt: r.createdAt,
+      })) as ViralAlert[];
+      let filtered = mapped;
+      if (filters?.unseen) filtered = filtered.filter((a) => !a.seen);
+      if (filters?.dismissed === false) filtered = filtered.filter((a) => !a.dismissed);
+      return filtered.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    },
+    async create(alert: Omit<ViralAlert, "id" | "createdAt" | "seen" | "notified" | "dismissed">): Promise<ViralAlert> {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        videoId: alert.videoId,
+        creatorId: alert.creatorId ?? null,
+        creatorUsername: alert.creatorUsername,
+        platform: alert.platform,
+        viralityScore: alert.viralityScore,
+        thresholdUsed: alert.thresholdUsed,
+        scoreBreakdownJson: stringifyJson(alert.scoreBreakdown ?? {}),
+        seen: false,
+        notified: false,
+        dismissed: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.viralAlerts).values(row);
+      } else {
+        ensureSqlite().insert(sqlite.viralAlerts).values(row).run();
+      }
+      return { ...alert, id, seen: false, notified: false, dismissed: false, createdAt: now };
+    },
+    async update(id: string, updates: Partial<ViralAlert>): Promise<void> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (updates.seen !== undefined) patch.seen = updates.seen;
+      if (updates.notified !== undefined) patch.notified = updates.notified;
+      if (updates.dismissed !== undefined) patch.dismissed = updates.dismissed;
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.update(pg.viralAlerts).set(patch as Record<string, never>).where(eq(pg.viralAlerts.id, id));
+        return;
+      }
+      ensureSqlite().update(sqlite.viralAlerts).set(patch as Record<string, never>).where(eq(sqlite.viralAlerts.id, id)).run();
+    },
+    async existsForVideo(videoId: string): Promise<boolean> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        const rows = await db.select().from(pg.viralAlerts).where(eq(pg.viralAlerts.videoId, videoId)).limit(1);
+        return rows.length > 0;
+      }
+      const row = ensureSqlite().select().from(sqlite.viralAlerts).where(eq(sqlite.viralAlerts.videoId, videoId)).get();
+      return Boolean(row);
+    },
+    async countUnseen(): Promise<number> {
+      const all = await this.list({ unseen: true, dismissed: false });
+      return all.length;
+    },
+  },
+  contentCalendar: {
+    async list(): Promise<ContentCalendarEntry[]> {
+      const rows = isPostgresMode()
+        ? await (await getPgDrizzle()).select().from(pg.contentCalendar)
+        : ensureSqlite().select().from(sqlite.contentCalendar).all();
+      return rows.map((r) => ({
+        id: r.id,
+        scriptId: r.scriptId ?? null,
+        scheduledDate: r.scheduledDate,
+        platform: (r.platform || "instagram") as ContentCalendarEntry["platform"],
+        status: (r.status as ContentCalendarEntry["status"]) || "draft",
+        postedUrl: r.postedUrl ?? null,
+        notes: r.notes ?? null,
+        title: r.title || "",
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
+    },
+    async create(entry: Omit<ContentCalendarEntry, "id" | "createdAt" | "updatedAt">): Promise<ContentCalendarEntry> {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        scriptId: entry.scriptId ?? null,
+        scheduledDate: entry.scheduledDate,
+        platform: entry.platform,
+        status: entry.status || "draft",
+        postedUrl: entry.postedUrl ?? null,
+        notes: entry.notes ?? null,
+        title: entry.title || "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.contentCalendar).values(row);
+      } else {
+        ensureSqlite().insert(sqlite.contentCalendar).values(row).run();
+      }
+      return { ...entry, id, createdAt: now, updatedAt: now };
+    },
+    async update(id: string, updates: Partial<ContentCalendarEntry>): Promise<void> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (updates.scriptId !== undefined) patch.scriptId = updates.scriptId ?? null;
+      if (updates.scheduledDate !== undefined) patch.scheduledDate = updates.scheduledDate;
+      if (updates.platform !== undefined) patch.platform = updates.platform;
+      if (updates.status !== undefined) patch.status = updates.status;
+      if (updates.postedUrl !== undefined) patch.postedUrl = updates.postedUrl ?? null;
+      if (updates.notes !== undefined) patch.notes = updates.notes ?? null;
+      if (updates.title !== undefined) patch.title = updates.title;
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.update(pg.contentCalendar).set(patch as Record<string, never>).where(eq(pg.contentCalendar.id, id));
+        return;
+      }
+      ensureSqlite().update(sqlite.contentCalendar).set(patch as Record<string, never>).where(eq(sqlite.contentCalendar.id, id)).run();
+    },
+    async delete(id: string): Promise<void> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.contentCalendar).where(eq(pg.contentCalendar.id, id));
+        return;
+      }
+      ensureSqlite().delete(sqlite.contentCalendar).where(eq(sqlite.contentCalendar.id, id)).run();
+    },
+  },
+  postedContent: {
+    async list(): Promise<PostedContent[]> {
+      const rows = isPostgresMode()
+        ? await (await getPgDrizzle()).select().from(pg.postedContent)
+        : ensureSqlite().select().from(sqlite.postedContent).all();
+      return rows.map((r) => ({
+        id: r.id,
+        scriptId: r.scriptId ?? null,
+        postedUrl: r.postedUrl,
+        platform: (r.platform || "instagram") as PostedContent["platform"],
+        postedAt: r.postedAt,
+        views24h: r.views24h || 0,
+        views48h: r.views48h || 0,
+        views7d: r.views7d || 0,
+        likes7d: r.likes7d || 0,
+        comments7d: r.comments7d || 0,
+        lastCheckedAt: r.lastCheckedAt ?? null,
+        createdAt: r.createdAt,
+      }));
+    },
+    async create(entry: Omit<PostedContent, "id" | "createdAt">): Promise<PostedContent> {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        scriptId: entry.scriptId ?? null,
+        postedUrl: entry.postedUrl,
+        platform: entry.platform,
+        postedAt: entry.postedAt,
+        views24h: entry.views24h || 0,
+        views48h: entry.views48h || 0,
+        views7d: entry.views7d || 0,
+        likes7d: entry.likes7d || 0,
+        comments7d: entry.comments7d || 0,
+        lastCheckedAt: entry.lastCheckedAt ?? null,
+        createdAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.postedContent).values(row);
+      } else {
+        ensureSqlite().insert(sqlite.postedContent).values(row).run();
+      }
+      return { ...entry, id, createdAt: now };
+    },
+    async update(id: string, updates: Partial<PostedContent>): Promise<void> {
+      const patch: Record<string, unknown> = {};
+      if (updates.views24h !== undefined) patch.views24h = updates.views24h;
+      if (updates.views48h !== undefined) patch.views48h = updates.views48h;
+      if (updates.views7d !== undefined) patch.views7d = updates.views7d;
+      if (updates.likes7d !== undefined) patch.likes7d = updates.likes7d;
+      if (updates.comments7d !== undefined) patch.comments7d = updates.comments7d;
+      if (updates.lastCheckedAt !== undefined) patch.lastCheckedAt = updates.lastCheckedAt ?? null;
+      if (Object.keys(patch).length === 0) return;
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.update(pg.postedContent).set(patch as Record<string, never>).where(eq(pg.postedContent.id, id));
+        return;
+      }
+      ensureSqlite().update(sqlite.postedContent).set(patch as Record<string, never>).where(eq(sqlite.postedContent.id, id)).run();
+    },
+    async delete(id: string): Promise<void> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.postedContent).where(eq(pg.postedContent.id, id));
+        return;
+      }
+      ensureSqlite().delete(sqlite.postedContent).where(eq(sqlite.postedContent.id, id)).run();
+    },
+  },
+  intelligenceReports: {
+    async list(): Promise<IntelligenceReport[]> {
+      const rows = isPostgresMode()
+        ? await (await getPgDrizzle()).select().from(pg.intelligenceReports)
+        : ensureSqlite().select().from(sqlite.intelligenceReports).all();
+      return rows
+        .map((r) => ({
+          id: r.id,
+          configName: r.configName || "",
+          periodFrom: r.periodFrom,
+          periodTo: r.periodTo,
+          reportJson: r.reportJson,
+          createdAt: r.createdAt,
+        }))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async get(id: string): Promise<IntelligenceReport | undefined> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        const rows = await db.select().from(pg.intelligenceReports).where(eq(pg.intelligenceReports.id, id)).limit(1);
+        if (!rows[0]) return undefined;
+        return {
+          id: rows[0].id,
+          configName: rows[0].configName || "",
+          periodFrom: rows[0].periodFrom,
+          periodTo: rows[0].periodTo,
+          reportJson: rows[0].reportJson,
+          createdAt: rows[0].createdAt,
+        };
+      }
+      const row = ensureSqlite().select().from(sqlite.intelligenceReports).where(eq(sqlite.intelligenceReports.id, id)).get();
+      if (!row) return undefined;
+      return {
+        id: row.id,
+        configName: row.configName || "",
+        periodFrom: row.periodFrom,
+        periodTo: row.periodTo,
+        reportJson: row.reportJson,
+        createdAt: row.createdAt,
+      };
+    },
+    async create(entry: Omit<IntelligenceReport, "id" | "createdAt">): Promise<IntelligenceReport> {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const row = {
+        id,
+        configName: entry.configName || "",
+        periodFrom: entry.periodFrom,
+        periodTo: entry.periodTo,
+        reportJson: entry.reportJson,
+        createdAt: now,
+      };
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.intelligenceReports).values(row);
+      } else {
+        ensureSqlite().insert(sqlite.intelligenceReports).values(row).run();
+      }
+      return { ...entry, id, createdAt: now };
+    },
+    async delete(id: string): Promise<void> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.intelligenceReports).where(eq(pg.intelligenceReports.id, id));
+        return;
+      }
+      ensureSqlite().delete(sqlite.intelligenceReports).where(eq(sqlite.intelligenceReports.id, id)).run();
+    },
+  },
+  settings: {
+    async get<T = unknown>(key: string, defaultValue?: T): Promise<T | undefined> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        const rows = await db.select().from(pg.appSettings).where(eq(pg.appSettings.key, key)).limit(1);
+        if (!rows[0]) return defaultValue;
+        return parseJson<T>(rows[0].valueJson, defaultValue as T);
+      }
+      const row = ensureSqlite().select().from(sqlite.appSettings).where(eq(sqlite.appSettings.key, key)).get();
+      if (!row) return defaultValue;
+      return parseJson<T>(row.valueJson, defaultValue as T);
+    },
+    async set(key: string, value: unknown): Promise<void> {
+      const valueJson = stringifyJson(value);
+      const now = new Date().toISOString();
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.insert(pg.appSettings).values({
+          key,
+          valueJson,
+          createdAt: now,
+          updatedAt: now,
+        }).onConflictDoUpdate({
+          target: pg.appSettings.key,
+          set: { valueJson, updatedAt: now },
+        });
+        return;
+      }
+      ensureSqlite().insert(sqlite.appSettings).values({
+        key,
+        valueJson,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: sqlite.appSettings.key,
+        set: { valueJson, updatedAt: now },
+      }).run();
+    },
+    async delete(key: string): Promise<void> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        await db.delete(pg.appSettings).where(eq(pg.appSettings.key, key));
+        return;
+      }
+      ensureSqlite().delete(sqlite.appSettings).where(eq(sqlite.appSettings.key, key)).run();
+    },
+    async getAll(): Promise<Record<string, unknown>> {
+      if (isPostgresMode()) {
+        const db = await getPgDrizzle();
+        const rows = await db.select().from(pg.appSettings);
+        return rows.reduce<Record<string, unknown>>((acc, row) => {
+          acc[row.key] = parseJson(row.valueJson, {});
+          return acc;
+        }, {});
+      }
+      const rows = ensureSqlite().select().from(sqlite.appSettings).all();
+      return rows.reduce<Record<string, unknown>>((acc, row) => {
+        acc[row.key] = parseJson(row.valueJson, {});
+        return acc;
+      }, {});
     },
   },
 };

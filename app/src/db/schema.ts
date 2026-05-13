@@ -17,10 +17,63 @@ export const creators = sqliteTable("creators", {
   avgViews30d: integer("avg_views_30d").notNull().default(0),
   lastScrapedAt: text("last_scraped_at").notNull().default(""),
   aliases: text("aliases").notNull().default("[]"),
+  groupId: text("group_id"),
   ...timestamps,
 }, (table) => ({
   uniqCreator: uniqueIndex("creators_platform_username_idx").on(table.platform, table.username),
 }));
+
+export const creatorGroups = sqliteTable("creator_groups", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  canonicalUsername: text("canonical_username").notNull(),
+  avatarUrl: text("avatar_url").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  ...timestamps,
+});
+
+export const schedulerJobs = sqliteTable("scheduler_jobs", {
+  id: text("id").primaryKey(),
+  creatorId: text("creator_id").notNull().references(() => creators.id),
+  platform: text("platform").notNull(),
+  intervalMinutes: integer("interval_minutes").notNull().default(360),
+  lastRunAt: text("last_run_at"),
+  nextRunAt: text("next_run_at").notNull(),
+  status: text("status").notNull().default("idle"),
+  lastError: text("last_error"),
+  consecutiveErrors: integer("consecutive_errors").notNull().default(0),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  ...timestamps,
+}, (table) => ({
+  uniqJob: uniqueIndex("scheduler_jobs_creator_platform_idx").on(table.creatorId, table.platform),
+}));
+
+export const viralAlerts = sqliteTable("viral_alerts", {
+  id: text("id").primaryKey(),
+  videoId: text("video_id").notNull().references(() => videos.id),
+  creatorId: text("creator_id"),
+  creatorUsername: text("creator_username").notNull(),
+  platform: text("platform").notNull(),
+  viralityScore: real("virality_score").notNull(),
+  thresholdUsed: real("threshold_used").notNull(),
+  scoreBreakdownJson: text("score_breakdown_json").notNull().default("{}"),
+  seen: integer("seen", { mode: "boolean" }).notNull().default(false),
+  notified: integer("notified", { mode: "boolean" }).notNull().default(false),
+  dismissed: integer("dismissed", { mode: "boolean" }).notNull().default(false),
+  ...timestamps,
+});
+
+export const schedulerRuns = sqliteTable("scheduler_runs", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().references(() => schedulerJobs.id),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  status: text("status").notNull().default("running"),
+  videosFound: integer("videos_found").notNull().default(0),
+  viralDetected: integer("viral_detected").notNull().default(0),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
 
 export const configs = sqliteTable("configs", {
   id: text("id").primaryKey(),
@@ -137,6 +190,11 @@ export const scripts = sqliteTable("scripts", {
   videoMode: text("video_mode"),
   videoProvider: text("video_provider"),
   sourceVideoUrl: text("source_video_url"),
+  parentScriptId: text("parent_script_id"),
+  version: integer("version").notNull().default(1),
+  abGroup: text("ab_group"),
+  performanceViews: integer("performance_views").notNull().default(0),
+  performanceTrackedAt: text("performance_tracked_at"),
   ...timestamps,
 }, (table) => ({
   uniqScriptVariant: uniqueIndex("scripts_video_variant_run_idx").on(table.videoId, table.scriptVariant, table.generationRunId),
@@ -196,6 +254,42 @@ export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
   valueJson: text("value_json").notNull().default("{}"),
   ...timestamps,
+});
+
+export const contentCalendar = sqliteTable("content_calendar", {
+  id: text("id").primaryKey(),
+  scriptId: text("script_id"),
+  scheduledDate: text("scheduled_date").notNull(),
+  platform: text("platform").notNull(),
+  status: text("status").notNull().default("draft"),
+  postedUrl: text("posted_url"),
+  notes: text("notes"),
+  title: text("title").notNull().default(""),
+  ...timestamps,
+});
+
+export const postedContent = sqliteTable("posted_content", {
+  id: text("id").primaryKey(),
+  scriptId: text("script_id"),
+  postedUrl: text("posted_url").notNull(),
+  platform: text("platform").notNull(),
+  postedAt: text("posted_at").notNull(),
+  views24h: integer("views_24h").notNull().default(0),
+  views48h: integer("views_48h").notNull().default(0),
+  views7d: integer("views_7d").notNull().default(0),
+  likes7d: integer("likes_7d").notNull().default(0),
+  comments7d: integer("comments_7d").notNull().default(0),
+  lastCheckedAt: text("last_checked_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const intelligenceReports = sqliteTable("intelligence_reports", {
+  id: text("id").primaryKey(),
+  configName: text("config_name").notNull().default(""),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  reportJson: text("report_json").notNull().default("{}"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const videosRelations = relations(videos, ({ many }) => ({

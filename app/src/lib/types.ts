@@ -19,6 +19,81 @@ export interface Creator {
   lastScrapedAt: string;
   /** Alternative usernames for cross-platform matching (e.g. "timothy_ronald" on YT, "timothyronald" on TikTok). */
   aliases?: string[];
+  /** Group ID — used to group same creator across platforms. */
+  groupId?: string | null;
+}
+
+export interface CreatorGroup {
+  id: string;
+  name: string;
+  canonicalUsername: string;
+  avatarUrl: string;
+  notes: string;
+}
+
+export interface SchedulerJob {
+  id: string;
+  creatorId: string;
+  platform: SocialPlatform;
+  intervalMinutes: number;
+  lastRunAt?: string | null;
+  nextRunAt: string;
+  status: "idle" | "running" | "error";
+  lastError?: string | null;
+  consecutiveErrors: number;
+  enabled: boolean;
+}
+
+export interface ViralAlert {
+  id: string;
+  videoId: string;
+  creatorId?: string | null;
+  creatorUsername: string;
+  platform: SocialPlatform;
+  viralityScore: number;
+  thresholdUsed: number;
+  scoreBreakdown?: Record<string, unknown>;
+  seen: boolean;
+  notified: boolean;
+  dismissed: boolean;
+  createdAt: string;
+}
+
+export interface ContentCalendarEntry {
+  id: string;
+  scriptId: string | null;
+  scheduledDate: string;
+  platform: SocialPlatform;
+  status: "draft" | "recorded" | "posted" | "cancelled";
+  postedUrl?: string | null;
+  notes?: string | null;
+  title?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PostedContent {
+  id: string;
+  scriptId: string | null;
+  postedUrl: string;
+  platform: SocialPlatform;
+  postedAt: string;
+  views24h: number;
+  views48h: number;
+  views7d: number;
+  likes7d: number;
+  comments7d: number;
+  lastCheckedAt?: string | null;
+  createdAt: string;
+}
+
+export interface IntelligenceReport {
+  id: string;
+  configName: string;
+  periodFrom: string;
+  periodTo: string;
+  reportJson: string;
+  createdAt: string;
 }
 
 export interface CreatorStats {
@@ -267,6 +342,12 @@ export interface Script {
   videoMode?: "kling3" | "kling2" | "seedance" | "dop" | "motion_control";  // Which model was used
   videoProvider?: "did" | "higgsfield" | "fal"; // Which API owns the videoJobId
   sourceVideoUrl?: string;  // For Video Clone: direct URL of the original scraped video (for audio extraction)
+  // Versioning & A/B testing
+  parentScriptId?: string | null;
+  version?: number;
+  abGroup?: string | null;       // "A" | "B" | "C" etc.
+  performanceViews?: number;
+  performanceTrackedAt?: string | null;
 }
 
 // ─── Avatar ────────────────────────────────────────────────────────────────────

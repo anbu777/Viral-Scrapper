@@ -60,3 +60,9 @@ app/test-results/
 app/playwright-report/
 app/blob-report/
 app/playwright/.cache/
+
+
+# ─── Pipeline-generated thumbnails (kept out of git to avoid bloat) ────────
+app/public/thumbnails/*.jpg
+app/public/thumbnails/*.png
+app/public/thumbnails/*.webp

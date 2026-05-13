@@ -6,6 +6,10 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TopBar } from "@/components/top-bar";
 import { PipelineProvider } from "@/context/pipeline-context";
+import { ToastProvider } from "@/components/ui/toast";
+import { LoadingScreen } from "@/components/loading-screen";
+import { PageTransition } from "@/components/page-transition";
+import { SchedulerTrigger } from "@/components/scheduler-trigger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,8 +22,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Virality System",
-  description: "AI-powered Instagram Reels viral content analyzer",
+  title: "Virality System — Social Media Intelligence",
+  description: "AI-powered viral content analyzer for Instagram, TikTok, and YouTube Shorts",
 };
 
 export default function RootLayout({
@@ -30,17 +34,23 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
-        <TooltipProvider>
-          <PipelineProvider>
-            <SidebarProvider>
-              <AppSidebar />
-              <main className="flex-1 overflow-auto min-h-screen">
-                <TopBar />
-                <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
-              </main>
-            </SidebarProvider>
-          </PipelineProvider>
-        </TooltipProvider>
+        <LoadingScreen />
+        <SchedulerTrigger />
+        <ToastProvider>
+          <TooltipProvider>
+            <PipelineProvider>
+              <SidebarProvider>
+                <AppSidebar />
+                <main className="flex-1 overflow-auto min-h-screen">
+                  <TopBar />
+                  <div className="mx-auto max-w-6xl px-6 py-8">
+                    <PageTransition>{children}</PageTransition>
+                  </div>
+                </main>
+              </SidebarProvider>
+            </PipelineProvider>
+          </TooltipProvider>
+        </ToastProvider>
       </body>
     </html>
   );

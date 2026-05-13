@@ -18,6 +18,7 @@ const UpdateSchema = z.object({
   username: z.string().min(1).optional(),
   category: z.string().min(1).optional(),
   platform: PlatformEnum.optional(),
+  groupId: z.string().nullable().optional(),
 });
 
 export async function GET(request: Request) {

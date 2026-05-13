@@ -1,313 +1,383 @@
-# Social Media AI — Viral Reels Pipeline
+<div align="center">
 
-> Scrape competitor **Instagram Reels, TikTok, and YouTube Shorts** → analyze with AI → generate word-for-word personalized scripts → optionally produce an avatar lip-sync video → ship it.
+# ⚡ Virality System
 
-Designed to run **100% free** out of the box (Gemini + Edge TTS + manual import or `yt-dlp`), with optional drop-in upgrades to paid APIs (Claude, ElevenLabs, Apify, fal.ai, D-ID).
+### Social Media Intelligence Platform for Viral Content Creation
 
----
+**Reverse-engineer viral short-form content on Instagram, TikTok, and YouTube Shorts — then generate your own.**
 
-## Table of contents
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Tailwind](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square)](https://orm.drizzle.team/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#license)
 
-1. [What you get](#what-you-get)
-2. [Tech stack](#tech-stack)
-3. [Quick start (5 minutes, fully free)](#quick-start-5-minutes-fully-free)
-4. [Full setup — every API explained](#full-setup--every-api-explained)
-5. [Choosing a scraper provider](#choosing-a-scraper-provider)
-6. [Running the app](#running-the-app)
-7. [Optional upgrades](#optional-upgrades)
-8. [Telegram approval bot (optional)](#telegram-approval-bot-optional)
-9. [Database options](#database-options)
-10. [Troubleshooting](#troubleshooting)
-11. [Project layout](#project-layout)
+</div>
 
 ---
 
-## What you get
+## 🎯 What is this?
 
-| Page | Path | Purpose |
-| --- | --- | --- |
-| Dashboard | `/` | Recent runs + summary stats |
-| Run pipeline | `/run` | Pick a config + creators, run with live streaming progress |
-| Videos | `/videos` | Browse analyzed competitor videos with thumbnails + full Gemini breakdown |
-| Scripts | `/scripts` | All generated scripts + one-click "Generate Video" pipeline |
-| Configs | `/configs` | CRUD analysis & concept prompts per niche |
-| Creators | `/creators` | Manage competitor handles across Instagram / TikTok / YouTube Shorts |
-| Voice profile | `/voice-profile` | Teach the AI your tone, niche, audience + upload your avatar image |
-| Prompt library | `/prompt-library` | Reusable prompt templates |
-| Import | `/import` | Paste raw IG / TikTok / Shorts URLs and the app figures the rest out |
-| Avatars | `/avatars` | Manage AI avatar identities |
+**Virality System** is an end-to-end intelligence platform that scrapes competitor short-form content across **Instagram Reels**, **TikTok**, and **YouTube Shorts**, analyzes what makes it viral with AI, and generates production-ready scripts and avatar videos adapted for *your* brand.
+
+Think of it as a **viral content reverse-engineering studio** — you point it at competitors, and it gives you trends, hooks, formats, and word-for-word scripts ready to be turned into AI avatar videos.
+
+> _Built for short-form content creators, brands, and agencies who want to systematize the process of identifying what's working in their niche and shipping content that resonates._
 
 ---
 
-## Tech stack
+## ✨ Highlights
 
-- **Next.js 16** (App Router) + **TypeScript**
-- **Tailwind CSS v4** + **shadcn/ui** with a glassmorphism, neon-green-on-black theme
-- **SQLite** locally (or optional Postgres via `DATABASE_URL`)
-- **Google Gemini 2.5 Flash** — video analysis, transcripts, concepts, scripts, consistency check *(free tier covers everything)*
-- **Microsoft Edge TTS** via `msedge-tts` — free neural voices, 400+ options, no signup
-- **yt-dlp** — free TikTok & YouTube Shorts scraping & download
-- **Playwright** — optional headless Instagram scraping
-- Optional paid providers: **Apify**, **Anthropic Claude**, **ElevenLabs**, **fal.ai**, **D-ID**, **Telegram Bot API** (free)
+### 🧠 Intelligence
+- **Multi-Platform Scraping** — Instagram (Apify / Playwright), TikTok (Apify / yt-dlp), YouTube Shorts (Data API v3 / yt-dlp)
+- **AI Video Analysis** — Gemini 2.5 Flash decomposes every viral video into hook, retention, format, audience, and viral mechanics
+- **Auto-Scheduler** — Cron-style polling per creator with viral threshold detection
+- **Viral Alerts** — Real-time notifications when tracked creators post breakout content (Telegram + Discord + Email)
+- **Trends Dashboard** — Charts of views over time, top creators, format patterns, posting heatmap, viral hook patterns
+- **Intelligence Reports** — Auto-generated weekly reports with recommendations, exportable as Markdown
+- **Niche Discovery** — Find creators by keyword across your scraped database
+
+### ✍️ Studio
+- **Word-for-Word Script Generation** — Gemini / Claude generates complete scripts (hook, body, CTA, production notes) styled to your voice profile
+- **A/B Hook Variations** — Auto-generate 3-5 hook style variants per script (question, shock, story, list, contrarian)
+- **Voice Profile** — Define your niche, tone, audience, signature phrases for consistent script output
+- **Avatar Library** — Define multiple AI personas with reference images and ElevenLabs voice IDs
+- **Video Pipeline** — Edge TTS or ElevenLabs → fal.ai (Kling 3.0) or D-ID → Gemini Vision consistency check → Telegram approval workflow
+- **Content Calendar** — Plan, schedule, and track posting status (draft / recorded / posted / cancelled)
+- **Performance Tracker** — Log actual post URLs and 24h/48h/7d metrics for prediction calibration
+
+### 🎨 UX
+- **Premium Dark UI** — Glassmorphism, neon-green accent, smooth page transitions, custom thin scrollbars
+- **Loading Screen** — Animated splash on first load (sessionStorage-gated)
+- **Toast System** — Non-blocking feedback for all CRUD actions
+- **Pre-flight Validation** — Pipeline runs validate config-creator alignment before starting
+- **Provider Health Dashboard** — At-a-glance status of every API key
 
 ---
 
-## Quick start (5 minutes, fully free)
+## 🏗️ Architecture
 
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Web Dashboard (Next.js)                      │
+│  Dashboard · Videos · Trends · Reports · Discover · Calendar · ...  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                ┌───────────────────┼───────────────────┐
+                │                   │                   │
+        ┌───────▼────────┐  ┌───────▼────────┐  ┌──────▼────────┐
+        │  Pipeline      │  │  Scheduler     │  │  Studio       │
+        │  Orchestrator  │  │  (auto-tick)   │  │  (TTS+Video)  │
+        └───────┬────────┘  └───────┬────────┘  └──────┬────────┘
+                │                   │                   │
+        ┌───────▼────────────────────▼─────────┐       │
+        │       Provider Layer (settings-driven)│       │
+        │  Apify · Playwright · yt-dlp · YT API │       │
+        └───────────────────┬──────────────────┘       │
+                            │                          │
+        ┌───────────────────▼──────────────────────────▼──────┐
+        │  AI Layer: Gemini · Claude · fal.ai · D-ID · TTS    │
+        └────────────────────────┬─────────────────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │   SQLite (default) or   │
+                    │   PostgreSQL (Drizzle)  │
+                    │   19 tables, migrated   │
+                    │   incrementally         │
+                    └─────────────────────────┘
+```
+
+### Pipeline Flow
+
+```
+1. Select Config + Params      →  /run page validates pre-flight
+2. Resolve Provider per-platform  → DB settings (or env fallback)
+3. Scrape Top-K viral videos   →  Filter by date + sort by views
+4. Analyze with Gemini 2.5     →  Hook, retention, format, audience
+5. Score & Rank                →  Virality formula (views, engagement, recency)
+6. Generate Scripts            →  Voice profile + analysis → word-for-word
+7. (Optional) Generate Video   →  TTS → fal.ai/D-ID → consistency check
+8. Telegram Approval           →  Webhook callbacks → DB status update
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 20+
+- (Optional) `yt-dlp` for TikTok / YouTube fallback scraping
+
+### Setup
 ```bash
-# 1. Clone the repo
-git clone https://github.com/<your-username>/social-media-ai.git
-cd social-media-ai
+git clone https://github.com/anbu777/Viral-Scrapper.git
+cd Viral-Scrapper/app
+npm install
 
-# 2. Install yt-dlp (required for TikTok / Shorts; optional for IG-only)
-#   Windows:
-winget install yt-dlp
-#   macOS:
-brew install yt-dlp
-#   Linux:
-pipx install yt-dlp
-
-# 3. Copy the env template
+# Set the only required key
 cp .env.example .env
+# Edit .env → GEMINI_API_KEY=your_key_here   (free at https://aistudio.google.com)
 
-# 4. Open .env and set exactly ONE key:
-#       GEMINI_API_KEY=<your-key>
-#   Free key in 60 seconds: https://aistudio.google.com/app/apikey
-
-# 5. Install Node deps and start
-cd app
-npm install
 npm run dev
+# → http://localhost:3001
 ```
 
-Open <http://localhost:3001>. You're ready to:
+### Optional integrations
+Configure these from the **Settings** page (no `.env` editing needed):
 
-- Add creators on `/creators` (pick the platform: IG / TikTok / YouTube Shorts)
-- Or paste URLs directly on `/import`
-- Run the pipeline on `/run`
+| Provider | Purpose | Free / Paid |
+|---|---|---|
+| **Apify** | Reliable scraping for IG + TikTok | Paid (~$0.001/req) |
+| **YouTube Data API v3** | Native YouTube Shorts metadata | Free (10k req/day) |
+| **Anthropic Claude** | Higher-quality script generation | Paid |
+| **ElevenLabs** | Voice cloning | Paid |
+| **fal.ai** | Kling 3.0 avatar video | Paid |
+| **D-ID** | Talking-head avatars | Paid |
+| **Telegram Bot** | Approval workflow | Free |
+| **Discord / Resend** | Alert notifications | Free / Free tier |
 
-That's it. No paid services required.
+> All optional integrations are toggleable from the dashboard. Without them, the app gracefully falls back to free tiers (Gemini + Edge TTS + yt-dlp).
 
 ---
 
-## Full setup — every API explained
+## 🗂️ Application Map
 
-The `.env.example` at the repo root documents every variable. Below is the human-readable version.
+### 🧠 Intelligence
+| Page | Path | Purpose |
+|---|---|---|
+| **Dashboard** | `/` | Setup status, warnings, top viral, intelligence shortcuts |
+| **Videos** | `/videos` | Browse scraped reels with thumbnails, AI analysis, generated concepts |
+| **Viral Alerts** | `/viral-alerts` | Auto-detected breakout content from tracked creators |
+| **Trends** | `/trends` | Charts: views over time, top creators, format patterns, heatmap |
+| **Reports** | `/reports` | Generate weekly intelligence reports (export Markdown) |
+| **Discover** | `/discover` | Find creators by keyword across scraped database |
 
-### Required for the free baseline
+### 🚀 Pipeline
+| Page | Path | Purpose |
+|---|---|---|
+| **Run** | `/run` | Launch pipeline with live progress streaming |
+| **Run History** | `/runs` | Past runs with retry button, error details |
+| **Manual Import** | `/import` | Paste IG/TikTok/YouTube URLs (auto-detected) |
 
-| Variable | What it does | Where to get it | Cost |
-| --- | --- | --- | --- |
-| `GEMINI_API_KEY` | Video analysis, transcripts, concept & script generation, consistency check | <https://aistudio.google.com/app/apikey> | **Free** — ~1500 req/day |
+### 🛠️ Setup
+| Page | Path | Purpose |
+|---|---|---|
+| **Creators** | `/creators` | CRUD across IG/TikTok/YT, grouped folder view, alias mapping |
+| **Configs** | `/configs` | CRUD pipeline configs with prompt template selector |
 
-That single key unlocks the entire pipeline.
+### 🎬 Studio
+| Page | Path | Purpose |
+|---|---|---|
+| **Scripts** | `/scripts` | Browse generated scripts, generate variations (A/B), trigger video gen |
+| **Calendar** | `/calendar` | Plan content with month-grid view, link to scripts |
+| **Performance** | `/performance` | Track posted content with 24h/48h/7d metrics |
+| **Generated** | `/generated` | Browse rendered avatar videos |
+| **Avatars** | `/avatars` | AI persona library with reference images + voice IDs |
+| **Voice Profile** | `/voice-profile` | Brand voice settings (niche, tone, signature phrases) |
+| **Prompt Library** | `/prompt-library` | Reusable image + video prompt templates |
 
-### Choose how to ingest videos
-
-`SCRAPER_PROVIDER` controls how Reels/Shorts/TikToks are fetched. Pick one based on your situation:
-
-| Value | What it does | API key needed? |
-| --- | --- | --- |
-| `manual` *(default)* | You paste URLs on `/import`; the app fetches metadata via Gemini / yt-dlp | None |
-| `apify` | Uses Apify's Instagram scraper for bulk extraction | `APIFY_API_TOKEN` — freemium, ~$5/mo free credits |
-| `local` | Scrapes Instagram via headless Playwright (you'll likely need a logged-in browser profile in `LOCAL_BROWSER_PROFILE_DIR`) | None |
-| `tiktok` | TikTok via `yt-dlp` | None — just install `yt-dlp` |
-| `youtube` | YouTube Shorts via `yt-dlp` | None — just install `yt-dlp` |
-
-> You can also mix-and-match per creator: set the **platform** when adding the creator on `/creators` and the pipeline will route to the right provider automatically.
-
-### Optional paid upgrades
-
-All of these are **fully optional**. If the key is empty the app silently falls back to the free path.
-
-| Variable | What it upgrades | Free fallback | Where |
-| --- | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Higher-quality script + concept generation via Claude Sonnet | Gemini | <https://console.anthropic.com/> |
-| `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` | Studio-grade voice cloning | Edge TTS (free) | <https://elevenlabs.io/> |
-| `FAL_KEY` | fal.ai image / avatar video generation | Avatar video skipped | <https://fal.ai/> |
-| `DID_API_KEY` | D-ID avatar lip-sync video | Avatar video skipped | <https://www.d-id.com/> |
-| `APIFY_API_TOKEN` | Apify Instagram scraper | `manual` / `local` providers | <https://console.apify.com/account/integrations> |
-
-### Always-free optional add-ons
-
-| Variable | What it does | Cost |
-| --- | --- | --- |
-| `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` + `TELEGRAM_WEBHOOK_SECRET` | Human-in-the-loop approval for generated videos | **Free** — Telegram Bot API |
-| `TTS_FREE_VOICE` | Override the Edge TTS voice (e.g. `id-ID-GadisNeural`, `en-US-GuyNeural`) | **Free** |
-| `OLLAMA_BASE_URL` + `OLLAMA_MODEL` | Run local LLMs instead of cloud | **Free** (requires local install) |
-| `WHISPER_COMMAND` | Local Whisper transcript | **Free** (CPU-heavy) |
+### ⚙️ System
+| Page | Path | Purpose |
+|---|---|---|
+| **Settings** | `/settings` | Provider keys, scheduler config, notification webhooks |
 
 ---
 
-## Choosing a scraper provider
+## 📡 API Reference
 
-```
-┌───────────────────────────────────────────────────────────┐
-│  Pick the smallest path that fits your goal.              │
-├───────────────────────────────────────────────────────────┤
-│  Just want to test → manual. Paste 1-2 URLs on /import.   │
-│  TikTok focus     → tiktok. Install yt-dlp, done.         │
-│  YouTube Shorts   → youtube. Install yt-dlp, done.        │
-│  Bulk Instagram   → apify (recommended) or local.         │
-└───────────────────────────────────────────────────────────┘
-```
+All APIs return JSON. Auth not enforced (intended for self-hosting).
 
-The `/import` page auto-detects the platform from any URL you paste, so you can use a single workflow across all three platforms without switching providers.
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/dashboard` | GET | Aggregated stats + provider health + warnings |
+| `/api/analytics?period=7d\|30d\|90d` | GET | Charts data (views over time, top creators, formats) |
+| `/api/reports` | GET / POST / DELETE | List, generate, delete intelligence reports |
+| `/api/reports/[id]?format=markdown` | GET | Get report (JSON or markdown export) |
+| `/api/discover` | GET / POST | Niche keyword discovery |
+| `/api/calendar` | GET / POST / PATCH / DELETE | Content calendar CRUD |
+| `/api/performance` | GET / POST / PATCH / DELETE | Posted content tracker |
+| `/api/scheduler` | GET / POST | Scheduler status + tick |
+| `/api/scheduler/alerts` | GET / PATCH / POST | Viral alerts list + actions |
+| `/api/scheduler/tick` | POST | Manual scheduler trigger |
+| `/api/settings/providers` | GET / POST | Provider keys (masked on read) |
+| `/api/settings/test` | POST | Test provider connection |
+| `/api/pipeline/runs` | GET / POST | Pipeline run management |
+| `/api/pipeline/validate` | POST | Pre-flight config validation |
+| `/api/scripts/[id]/variations` | GET / POST | Script hook variations (A/B) |
+| `/api/scripts/[id]/generate-video` | POST | Trigger video generation |
+| `/api/creators` | GET / POST / PATCH / DELETE | Creator CRUD |
+| `/api/creator-groups` | GET / POST / PUT / DELETE | Cross-platform creator grouping |
+| `/api/creators/refresh` | POST | Refresh creator stats from provider |
+| `/api/configs` | GET / POST / PATCH / DELETE | Pipeline config CRUD |
+| `/api/videos` | GET / DELETE | Video CRUD |
+| `/api/videos/[id]/analysis` | POST | Run AI analysis on a video |
+| `/api/videos/[id]/transcript` | POST | Generate word-for-word transcript |
+| `/api/scripts` | GET / PATCH / DELETE | Script CRUD |
+| `/api/scripts/generate` | POST | Generate script from analyzed video |
+| `/api/import/instagram-urls` | POST | Manual URL import (auto-detects platform) |
+| `/api/voice-profile` | GET / POST | Brand voice profile |
+| `/api/avatars` | GET / POST / PATCH / DELETE | Avatar profile CRUD |
+| `/api/telegram/webhook` | POST | Telegram approval callback |
 
 ---
 
-## Running the app
+## 🗄️ Database
+
+**Default**: SQLite at `data/app.db` (zero-config, perfect for local).
+**Optional**: PostgreSQL via `DATABASE_URL` env (Drizzle handles both transparently).
+
+### Tables (19 total)
+```
+─── Core ───────────────────────────────
+creators              configs            scrape_runs
+videos                scrape_run_items   analysis_runs
+scripts               avatars            generation_jobs
+
+─── Operations ─────────────────────────
+provider_logs         quality_scores     app_settings
+
+─── Multi-Platform Grouping ────────────
+creator_groups
+
+─── Auto-Scheduler ─────────────────────
+scheduler_jobs        viral_alerts       scheduler_runs
+
+─── Phase 3 Intelligence ───────────────
+content_calendar      posted_content     intelligence_reports
+```
+
+Migrations are **incremental** (`ALTER TABLE` on boot), so upgrading existing installs never loses data.
+
+---
+
+## 🛡️ Provider Strategy (Resilient by Design)
+
+Every external integration has a **fallback chain**:
+
+```
+Instagram   →  Apify      →  Playwright  →  Manual URL import
+TikTok      →  Apify      →  yt-dlp      →  Manual URL import
+YouTube     →  Data API   →  yt-dlp      →  Manual URL import
+
+Video DL    →  Provider URL  →  URL refresh  →  yt-dlp direct
+AI Analysis →  Gemini Flash  →  Metadata-only fallback
+Script Gen  →  Claude (paid) →  Gemini (free)
+TTS         →  ElevenLabs    →  Microsoft Edge TTS (free)
+Notify      →  Telegram      →  Discord      →  Email (Resend)
+```
+
+If a paid provider isn't configured, the app silently falls back to the free path. **No hard failures from missing keys.**
+
+---
+
+## 🧪 Verification
 
 ```bash
 cd app
-npm install
-npm run dev          # http://localhost:3001
-npm run build        # production build
-npm run start        # serve production build
-npm run lint
-npm run typecheck    # tsc --noEmit
-npm test             # vitest
+npm run typecheck   # 0 errors expected
+npm run test        # 9/9 passing
+npm run build       # All routes register, production-ready
+npx tsx e2e-verify.ts   # Inspects DB integrity end-to-end
 ```
 
-The dev server defaults to **port 3001** (see `app/package.json` → `"dev": "next dev -p 3001"`). Adjust `APP_BASE_URL` in `.env` if you change the port.
-
----
-
-## Optional upgrades
-
-### Add Claude for higher-quality scripts
-
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-AI_PROVIDER=claude
-```
-
-If the key is missing the app automatically routes back to Gemini — no errors, no config branches.
-
-### Add ElevenLabs voice cloning
-
-```env
-ELEVENLABS_API_KEY=sk_...
-ELEVENLABS_VOICE_ID=<voice-id>
-```
-
-When empty, the app uses Microsoft Edge TTS (also free, no signup).
-
-### Add avatar video generation
-
-Pick one:
-
-```env
-# Option A — fal.ai (recommended)
-VIDEO_PROVIDER=fal
-FAL_KEY=...
-
-# Option B — D-ID
-DID_API_KEY=...
-```
-
-Leave `VIDEO_PROVIDER=none` to skip the avatar stage entirely.
-
----
-
-## Telegram approval bot (optional)
-
-1. Talk to [@BotFather](https://t.me/BotFather) → `/newbot` → grab the token.
-2. Talk to [@userinfobot](https://t.me/userinfobot) → grab your chat ID.
-3. Add to `.env`:
-
-   ```env
-   TELEGRAM_BOT_TOKEN=123456:ABC...
-   TELEGRAM_CHAT_ID=123456789
-   TELEGRAM_WEBHOOK_SECRET=<random-string>
-   APP_BASE_URL=https://your-public-https-url
-   ```
-
-4. Expose your dev server (for local testing):
-
-   ```bash
-   ngrok http 3001
-   # or
-   cloudflared tunnel --url http://localhost:3001
-   ```
-
-5. Register the webhook:
-
-   ```bash
-   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<APP_BASE_URL>/api/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>"
-   ```
-
-The Telegram bot is **100% free** — there is no paid tier.
-
----
-
-## Database options
-
-The app ships with **SQLite** by default (`data/app.db`, ignored by git). To use Postgres (e.g. Supabase free tier), set:
-
-```env
-DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
-```
-
-Then run migrations:
-
+### Live API Smoke
 ```bash
-cd app
-npm run db:migrate         # SQLite
-npm run db:migrate:pg      # Postgres
-```
-
-To seed from the bundled CSVs:
-
-```bash
-npm run db:migrate-csv     # imports data/configs.csv, creators.csv, etc.
+# Once dev server is running on :3001
+curl http://localhost:3001/api/dashboard | jq .stats
+curl http://localhost:3001/api/analytics?period=30d | jq .summary
+curl -X POST http://localhost:3001/api/reports \
+     -H "Content-Type: application/json" \
+     -d '{"daysBack":7}' | jq .report.recommendations
 ```
 
 ---
 
-## Troubleshooting
-
-| Symptom | Fix |
-| --- | --- |
-| `yt-dlp: command not found` | Install it (see [Quick start](#quick-start-5-minutes-fully-free)). Override the binary path with `YTDLP_COMMAND` if needed. |
-| Instagram thumbnails missing | Instagram CDN URLs expire quickly. The app proxies them via `/api/proxy-image`. If they still fail, re-scrape. |
-| `EADDRINUSE :::3001` | The dev server is already running in another terminal. Kill it or change the port. |
-| `ANTHROPIC_API_KEY` not set warnings | Safe to ignore — Claude is optional and Gemini handles everything. |
-| "Telegram webhook 401" | Make sure `TELEGRAM_WEBHOOK_SECRET` matches what you used in `setWebhook`. |
-| Slow video analysis | Gemini free tier rate-limits at ~1500 req/day. Add `ANTHROPIC_API_KEY` to spread load, or upgrade Gemini. |
-
----
-
-## Project layout
+## 📂 Project Layout
 
 ```
-.
-├── README.md                # This file
-├── CLAUDE.md                # Claude Code session guidance
-├── .env.example             # Documented env template
-├── app/                     # Next.js application (root of npm scripts)
+viral-ig-scraper/
+├── app/                          # Next.js application root
 │   ├── src/
-│   │   ├── app/             # Pages + API routes (App Router)
-│   │   ├── components/      # UI components (shadcn + custom)
-│   │   ├── lib/             # Pipeline, providers, AI clients, types, utils
-│   │   │   └── providers/   # Instagram / TikTok / YouTube scrapers
-│   │   ├── db/              # SQLite + Postgres schemas & migrations
-│   │   └── scripts/         # One-off scripts (CSV → DB migration, etc.)
-│   ├── drizzle.config.ts
+│   │   ├── app/                  # Pages + API routes (App Router)
+│   │   │   ├── api/              # 40+ API endpoints
+│   │   │   ├── trends/           # Charts dashboard
+│   │   │   ├── reports/          # Intelligence reports
+│   │   │   ├── discover/         # Niche discovery
+│   │   │   ├── calendar/         # Content calendar
+│   │   │   ├── performance/      # Performance tracker
+│   │   │   ├── viral-alerts/     # Viral alerts
+│   │   │   └── ...               # Other pages
+│   │   ├── components/           # Sidebar, top-bar, toast, loading-screen
+│   │   ├── db/                   # Schema + migrations + repositories
+│   │   ├── hooks/                # use-toast, etc.
+│   │   └── lib/                  # Core libraries
+│   │       ├── pipeline-runs.ts        # Pipeline orchestrator
+│   │       ├── scheduler.ts            # Auto-scheduler tick logic
+│   │       ├── viral-detector.ts       # Viral threshold detection
+│   │       ├── report-generator.ts     # Weekly reports
+│   │       ├── script-variations.ts    # A/B hook variation gen
+│   │       ├── niche-discovery.ts      # Creator discovery
+│   │       ├── creator-grouping.ts     # Cross-platform mapping
+│   │       ├── notifications.ts        # Telegram + Discord + Email
+│   │       ├── app-settings.ts         # DB-backed provider config
+│   │       └── providers/              # Per-platform scrapers
 │   └── package.json
-├── data/                    # Local data (most files gitignored)
-│   ├── configs.csv          # Bundled sample configs
-│   ├── creators.csv         # Bundled sample creators
-│   ├── prompt-library.json  # Bundled sample prompts
-│   └── app.db               # SQLite database (gitignored)
-├── context/                 # Background docs for Claude
-└── plans/                   # Implementation plans
+├── data/                         # SQLite DB + thumbnails (local)
+├── plans/                        # Master implementation plans
+└── README.md                     # You are here
 ```
 
 ---
 
-## License
+## 🎓 How It Compares
 
-MIT. See [LICENSE](./LICENSE) if included.
+| Feature | Manual Browse | Generic Scrapers | **Virality System** |
+|---|---|---|---|
+| Multi-platform | Manual switching | Single platform | ✅ IG + TikTok + YT in one place |
+| Viral ranking | Eye-balling | Sort by views | ✅ Engagement+recency+velocity formula |
+| AI breakdown | None | Caption only | ✅ Hook, retention, format, audience |
+| Script generation | Copy/paste | None | ✅ Word-for-word with voice profile |
+| A/B variations | None | None | ✅ 5 hook styles per script |
+| Auto-scheduler | None | Cron scripts | ✅ Built-in with viral alerts |
+| Reports | None | None | ✅ Weekly intel with recommendations |
+| Self-hosted | N/A | Often SaaS | ✅ Local-first, no vendor lock |
 
-Built with ❤ for creators who want to ship faster.
+---
+
+## 🔮 Roadmap
+
+- [ ] Multi-account / multi-brand mode
+- [ ] PDF export for intelligence reports
+- [ ] Drag-and-drop calendar planner
+- [ ] Auto-fetch posted content metrics via yt-dlp
+- [ ] In-app analytics for script performance correlation
+- [ ] Browser extension for one-click "track this creator"
+- [ ] Mobile-friendly pages (currently desktop-first)
+
+---
+
+## 📜 License
+
+MIT — use freely for personal or commercial projects.
+
+---
+
+## 🙏 Credits
+
+Built on top of incredible open source:
+- [Next.js 16](https://nextjs.org/) · [React 19](https://react.dev/) · [Tailwind 4](https://tailwindcss.com/)
+- [Drizzle ORM](https://orm.drizzle.team/) · [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
+- [Recharts](https://recharts.org/) · [shadcn/ui](https://ui.shadcn.com/) · [lucide-react](https://lucide.dev/)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Playwright](https://playwright.dev/)
+- AI providers: [Google Gemini](https://aistudio.google.com), [Anthropic Claude](https://claude.ai), [fal.ai](https://fal.ai), [D-ID](https://d-id.com), [ElevenLabs](https://elevenlabs.io)
+
+---
+
+<div align="center">
+
+**Made for creators who want to ship viral content systematically, not by luck.**
+
+⭐ Star this repo if you find it useful!
+
+</div>

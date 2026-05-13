@@ -61,9 +61,14 @@ export async function analyzeVideoToStructuredJson(input: {
     try {
       parsed = JSON.parse(jsonStr);
     } catch (parseErr) {
-      // JSON parse failure is retriable — throw so caller (withBackoff) can retry
-      const snippet = jsonStr.slice(0, 300);
-      throw new Error(`Failed to parse Gemini JSON output: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. Raw snippet: ${snippet}`);
+      // JSON parse failure — return fallback instead of throwing
+      // This handles cases where Gemini returns text that isn't valid JSON
+      console.warn(`[gemini-json-analysis] JSON parse failed, using fallback. Snippet: ${jsonStr.slice(0, 200)}`);
+      return {
+        analysis: makeFallbackAnalysis("", "Gemini returned non-JSON response."),
+        outcome: "fallback",
+        error: `Failed to parse Gemini JSON: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+      };
     }
     
     const analysis = normalizeAnalysis(parsed);
@@ -71,9 +76,26 @@ export async function analyzeVideoToStructuredJson(input: {
     return { analysis, outcome: "ok" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // All errors propagate to caller for retry via withBackoff.
-    // This includes: Gemini API errors, JSON parse errors, network errors, rate limits.
-    throw error;
+    // "No JSON object in model output" — Gemini returned plain text, use fallback
+    if (/No JSON object|did not contain JSON/i.test(message)) {
+      console.warn(`[gemini-json-analysis] ${message} — using fallback analysis`);
+      return {
+        analysis: makeFallbackAnalysis("", "AI response did not contain structured JSON."),
+        outcome: "fallback",
+        error: message,
+      };
+    }
+    // Network/rate errors should propagate for retry by withBackoff
+    if (/429|503|502|504|timeout|ECONNRESET|fetch failed|rate|quota/i.test(message)) {
+      throw error;
+    }
+    // All other errors — return fallback gracefully
+    console.warn(`[gemini-json-analysis] Unexpected error, using fallback: ${message}`);
+    return {
+      analysis: makeFallbackAnalysis("", `Analysis error: ${message}`),
+      outcome: "fallback",
+      error: message,
+    };
   }
 }
 

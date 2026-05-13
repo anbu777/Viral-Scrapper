@@ -30,6 +30,7 @@ import {
   XCircle,
   RefreshCw,
   User,
+  Sparkles,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown-content";
 import type { Script, AvatarProfile } from "@/lib/types";
@@ -58,6 +59,7 @@ export default function ScriptsPage() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [retryingAll, setRetryingAll] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [variationLoading, setVariationLoading] = useState<string | null>(null);
   const pollingRefs = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
 
   // Avatar picker
@@ -121,6 +123,25 @@ export default function ScriptsPage() {
     stopPolling(id);
     await fetch(`/api/scripts?id=${id}`, { method: "DELETE" });
     loadScripts();
+  };
+
+  const generateVariations = async (id: string) => {
+    setVariationLoading(id);
+    setLastError(null);
+    try {
+      const res = await fetch(`/api/scripts/${id}/variations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: 3 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      await loadScripts();
+    } catch (e) {
+      setLastError(e instanceof Error ? e.message : "Failed to generate variations");
+    } finally {
+      setVariationLoading(null);
+    }
   };
 
   const copyScript = async () => {
@@ -454,6 +475,11 @@ export default function ScriptsPage() {
                         {script.contentType}
                       </Badge>
                     )}
+                    {script.abGroup && (
+                      <Badge className="rounded-md text-[10px] bg-purple-500/15 border-purple-500/25 text-purple-300">
+                        Variant {script.abGroup}
+                      </Badge>
+                    )}
                     {script.estimatedDuration && (
                       <span className="flex items-center gap-1">
                         <Play className="h-2.5 w-2.5" />
@@ -525,7 +551,7 @@ export default function ScriptsPage() {
               )}
 
               {/* Actions */}
-              <div className="flex gap-1.5 pt-1">
+              <div className="flex gap-1.5 pt-1 flex-wrap">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -536,6 +562,21 @@ export default function ScriptsPage() {
                   Script
                 </Button>
                 <VideoActions script={script} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => generateVariations(script.id)}
+                  disabled={variationLoading === script.id}
+                  className="rounded-xl text-[11px] h-8 gap-1 glass border border-purple-500/15 text-purple-300 hover:bg-purple-500/10 px-3"
+                  title="Generate hook variations (A/B test)"
+                >
+                  {variationLoading === script.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Variations
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

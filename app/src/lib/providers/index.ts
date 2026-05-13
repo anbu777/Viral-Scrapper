@@ -7,6 +7,8 @@ import { manualProvider } from "./manual-provider";
 import { metaProvider } from "./meta-provider";
 import { tiktokProvider } from "./tiktok-provider";
 import { youtubeProvider } from "./youtube-provider";
+import { apifyTiktokProvider } from "./apify-tiktok-provider";
+import { youtubeApiProvider } from "./youtube-api-provider";
 
 const providers: Record<ScraperProviderName, InstagramScraperProvider> = {
   apify: apifyProvider,
@@ -22,17 +24,21 @@ export function getInstagramProvider(name: ScraperProviderName = getEnv().SCRAPE
 }
 
 /**
- * Picks a provider that can actually collect profile stats. Manual import is a
- * storage-only provider, so using it for "Add Creator" leaves followers/views
- * at zero. When Apify is configured we prefer it for Instagram profile stats;
- * otherwise we fall back to the user's selected Instagram provider.
+ * Picks a provider that can actually collect profile stats. Prefers configured
+ * paid providers (Apify, YouTube API) when API keys are available.
  */
 export function getStatsProviderForPlatform(
   platform: SocialPlatform,
   fallback: ScraperProviderName = getEnv().SCRAPER_PROVIDER
 ): InstagramScraperProvider {
-  if (platform === "tiktok") return providers.tiktok;
-  if (platform === "youtube_shorts") return providers.youtube;
+  if (platform === "tiktok") {
+    if (process.env.APIFY_API_TOKEN) return apifyTiktokProvider;
+    return providers.tiktok;
+  }
+  if (platform === "youtube_shorts") {
+    if (process.env.YOUTUBE_API_KEY) return youtubeApiProvider;
+    return providers.youtube;
+  }
   if ((fallback === "manual" || fallback === "meta") && process.env.APIFY_API_TOKEN) {
     return providers.apify;
   }
@@ -40,16 +46,21 @@ export function getStatsProviderForPlatform(
 }
 
 /**
- * Picks the best scraper provider for a given content platform. Instagram
- * falls back to the user's globally configured `SCRAPER_PROVIDER`. TikTok and
- * YouTube Shorts always go through their dedicated yt-dlp-based providers.
+ * Picks the best scraper provider for a given content platform. Auto-routes to
+ * configured paid providers (Apify, YouTube API) when keys are available.
  */
 export function getProviderForPlatform(
   platform: SocialPlatform,
   fallback: ScraperProviderName = getEnv().SCRAPER_PROVIDER
 ): InstagramScraperProvider {
-  if (platform === "tiktok") return providers.tiktok;
-  if (platform === "youtube_shorts") return providers.youtube;
+  if (platform === "tiktok") {
+    if (process.env.APIFY_API_TOKEN) return apifyTiktokProvider;
+    return providers.tiktok;
+  }
+  if (platform === "youtube_shorts") {
+    if (process.env.YOUTUBE_API_KEY) return youtubeApiProvider;
+    return providers.youtube;
+  }
   return getInstagramProvider(fallback);
 }
 
