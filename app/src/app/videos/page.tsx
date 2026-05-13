@@ -23,6 +23,7 @@ import {
   XCircle, RefreshCw, User, FileText, Download, Square, CheckSquare, Trash2,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown-content";
+import { VideoThumbnail } from "@/components/avatar-placeholder";
 import type { Video as VideoType, Config, AvatarProfile, Script } from "@/lib/types";
 
 function formatViews(n: number): string {
@@ -660,18 +661,11 @@ function VideosContent() {
                   rel="noopener noreferrer"
                   className="block h-full w-full"
                 >
-                  {video.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={video.thumbnail.startsWith("/") ? video.thumbnail : `/api/proxy-image?url=${encodeURIComponent(video.thumbnail)}`}
-                      alt={`@${video.creator}`}
-                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <Film className="h-10 w-10 text-muted-foreground/20" />
-                    </div>
-                  )}
+                  <VideoThumbnail
+                    src={video.thumbnail}
+                    creator={video.creator}
+                    alt={`@${video.creator}`}
+                  />
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent pt-8 pb-2.5 px-3">
                     <div className="flex items-center gap-1.5">
                       <Play className="h-4 w-4 text-white fill-white" />
@@ -821,18 +815,7 @@ function VideosContent() {
             <>
               <div className="flex items-center gap-4 p-5 border-b border-white/[0.06]">
                 <div className="relative h-16 w-12 shrink-0 rounded-lg overflow-hidden bg-white/[0.02]">
-                  {modalVideo.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={modalVideo.thumbnail.startsWith("/") ? modalVideo.thumbnail : `/api/proxy-image?url=${encodeURIComponent(modalVideo.thumbnail)}`}
-                      alt={`@${modalVideo.creator}`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Film className="h-4 w-4 text-muted-foreground/30" />
-                    </div>
-                  )}
+                  <VideoThumbnail src={modalVideo.thumbnail} creator={modalVideo.creator} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { VideoThumbnail } from "@/components/avatar-placeholder";
 import {
   Film,
   FileText,
@@ -243,18 +244,9 @@ export default function DashboardPage() {
                   href={`/videos?creator=${encodeURIComponent(v.creator)}`}
                   className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.03] transition-colors"
                 >
-                  {v.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={v.thumbnail.startsWith("/") ? v.thumbnail : `/api/proxy-image?url=${encodeURIComponent(v.thumbnail)}`}
-                      alt=""
-                      className="h-12 w-9 rounded-md object-cover bg-white/[0.05]"
-                    />
-                  ) : (
-                    <div className="h-12 w-9 rounded-md bg-white/[0.05] flex items-center justify-center">
-                      <Film className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  )}
+                  <div className="h-12 w-9 rounded-md overflow-hidden bg-white/[0.05] shrink-0">
+                    <VideoThumbnail src={v.thumbnail} creator={v.creator} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">@{v.creator}</p>
                     <p className="text-[11px] text-muted-foreground">

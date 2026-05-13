@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { AvatarPlaceholder } from "@/components/avatar-placeholder";
 import {
   Select,
   SelectContent,
@@ -631,23 +632,12 @@ function CreatorCard({ creator, onEdit, onDelete, onRefresh, refreshing, error }
           rel="noopener noreferrer"
           className="flex items-center gap-3 hover:opacity-80 transition-opacity flex-1 min-w-0"
         >
-          <div className="relative h-12 w-12 shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-neon/10 to-emerald-500/10 border border-white/[0.1]">
-            {creator.profilePicUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`/api/proxy-image?url=${encodeURIComponent(creator.profilePicUrl)}`}
-                alt={`@${creator.username}`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-lg font-bold text-muted-foreground/50">
-                {creator.username.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.1] bg-black/80 text-neon">
-              <PlatformIcon platform={creator.platform || "instagram"} className="h-3 w-3" />
-            </span>
-          </div>
+          <AvatarPlaceholder
+            name={creator.username}
+            src={creator.profilePicUrl}
+            size={48}
+            platform={creator.platform || "instagram"}
+          />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">@{creator.username}</p>
             <div className="mt-0.5 flex items-center gap-1.5">
@@ -733,20 +723,11 @@ function CreatorMiniCard({ creator, onEdit, onDelete, onRefresh, onUngroup, refr
   return (
     <div className="group rounded-xl bg-black/20 border border-white/[0.04] p-3 hover:bg-black/30 transition-colors">
       <div className="flex items-center gap-2.5">
-        <div className="relative h-8 w-8 shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-neon/10 to-emerald-500/10 border border-white/[0.06]">
-          {creator.profilePicUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/proxy-image?url=${encodeURIComponent(creator.profilePicUrl)}`}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs font-bold text-muted-foreground/50">
-              {creator.username.charAt(0).toUpperCase()}
-            </div>
-          )}
-        </div>
+        <AvatarPlaceholder
+          name={creator.username}
+          src={creator.profilePicUrl}
+          size={32}
+        />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <PlatformIcon platform={creator.platform} className="h-3 w-3 text-neon" />

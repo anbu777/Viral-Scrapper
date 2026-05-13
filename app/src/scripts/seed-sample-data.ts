@@ -12,7 +12,7 @@
 
 import { randomUUID } from "crypto";
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { VideoThumbnail } from "@/components/avatar-placeholder";
 import type { ViralAlert, Video } from "@/lib/types";
 
 interface AlertWithVideo extends ViralAlert {
@@ -232,23 +233,11 @@ export default function ViralAlertsPage() {
             >
               <div className="flex items-start gap-4">
                 {/* Thumbnail */}
-                <div className="shrink-0">
-                  {alert.video?.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={
-                        alert.video.thumbnail.startsWith("/")
-                          ? alert.video.thumbnail
-                          : `/api/proxy-image?url=${encodeURIComponent(alert.video.thumbnail)}`
-                      }
-                      alt=""
-                      className="h-24 w-16 rounded-xl object-cover bg-white/[0.05]"
-                    />
-                  ) : (
-                    <div className="h-24 w-16 rounded-xl bg-white/[0.05] flex items-center justify-center">
-                      <Search className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  )}
+                <div className="shrink-0 h-24 w-16 rounded-xl overflow-hidden bg-white/[0.05]">
+                  <VideoThumbnail
+                    src={alert.video?.thumbnail}
+                    creator={alert.creatorUsername}
+                  />
                 </div>
 
                 {/* Content */}
