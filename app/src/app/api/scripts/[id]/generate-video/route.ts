@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { repo } from "@/db/repositories";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,6 @@ export async function POST(
   const duration = body.duration ?? 10;
 
   try {
-    const { readScripts, updateScript } = await import("@/lib/csv");
     const { generateNanoBananaPro, submitKling3Video } = await import("@/lib/fal");
     const { saveGeneratedImage } = await import("@/lib/avatar");
 
@@ -20,11 +20,11 @@ export async function POST(
       return NextResponse.json({ error: "FAL_KEY not set in .env.local — get it at fal.ai/dashboard" }, { status: 500 });
     }
 
-    const scripts = readScripts();
+    const scripts = await repo.scripts.list();
     const script = scripts.find((s) => s.id === id);
     if (!script) return NextResponse.json({ error: "Script not found" }, { status: 404 });
 
-    updateScript(id, { videoStatus: "processing", videoJobId: undefined, videoUrl: undefined, avatarId });
+    await repo.scripts.update(id, { videoStatus: "processing", videoJobId: undefined, videoUrl: undefined, avatarId });
     console.log(`[generate-video] "${script.title}" | avatar: ${avatarId}`);
 
     // ── STEP 1: Generate avatar image via Nano Banana Pro ─────────────────────
@@ -62,7 +62,7 @@ export async function POST(
     console.log(`[generate-video] Submitting Kling 3.0 video job (${duration}s, ${filled.framing}, ${filled.actionType})...`);
     const videoJobId = await submitKling3Video(avatarImageUrl, filled.videoPrompt, duration, filled.negativePrompt);
 
-    updateScript(id, {
+    await repo.scripts.update(id, {
       videoJobId,
       videoStatus: "processing",
       videoProvider: "fal",
@@ -79,8 +79,7 @@ export async function POST(
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[generate-video] ERROR:`, msg);
     try {
-      const { updateScript } = await import("@/lib/csv");
-      updateScript(id, { videoStatus: "failed" });
+      await repo.scripts.update(id, { videoStatus: "failed" });
     } catch { /* best effort */ }
     return NextResponse.json({ error: msg }, { status: 500 });
   }

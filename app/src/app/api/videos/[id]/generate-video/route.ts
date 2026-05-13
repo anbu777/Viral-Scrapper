@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
+import { repo } from "@/db/repositories";
+import type { Script } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -13,7 +15,6 @@ export async function POST(
   const duration = body.duration ?? 10;
 
   try {
-    const { readVideos, readScripts, writeScripts, updateScript } = await import("@/lib/csv");
     const { generateNanoBananaPro, submitKling3Video } = await import("@/lib/fal");
     const { saveGeneratedImage, listReferenceImages, readReferenceImage, readAvatar } = await import("@/lib/avatar");
     const { generateFilledPromptsFromVideo } = await import("@/lib/promptgen");
@@ -22,8 +23,7 @@ export async function POST(
       return NextResponse.json({ error: "FAL_KEY not set in .env.local — get it at fal.ai/dashboard" }, { status: 500 });
     }
 
-    const videos = readVideos();
-    const video = videos.find((v) => v.id === id);
+    const video = await repo.videos.find(id);
     if (!video) return NextResponse.json({ error: "Video not found" }, { status: 404 });
 
     const avatarProfile = readAvatar(avatarId);
@@ -35,7 +35,7 @@ export async function POST(
 
     // Create a Script record so the existing video-status polling works
     const scriptId = uuid();
-    const newScript = {
+    const newScript: Script = {
       id: scriptId,
       videoId: video.id,
       videoCreator: video.creator,
@@ -57,8 +57,7 @@ export async function POST(
       sourceVideoUrl: video.videoFileUrl || undefined,
     };
 
-    const existing = readScripts();
-    writeScripts([...existing, newScript]);
+    await repo.scripts.upsert(newScript);
 
     // Load avatar reference images for identity-locked generation
     const refFilenames = listReferenceImages(avatarId);
@@ -92,7 +91,7 @@ export async function POST(
     console.log(`[videos/generate-video] Submitting Kling 3.0 job (${duration}s, ${filled.framing}, ${filled.actionType})...`);
     const videoJobId = await submitKling3Video(avatarImageUrl, filled.videoPrompt, duration, filled.negativePrompt);
 
-    updateScript(scriptId, {
+    await repo.scripts.update(scriptId, {
       videoJobId,
       videoStatus: "processing",
       videoProvider: "fal",

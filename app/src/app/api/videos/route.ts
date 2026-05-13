@@ -20,3 +20,25 @@ export async function PATCH(request: Request) {
   if (!video) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(await repo.videos.update(id, { starred }));
 }
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  const ids = searchParams.get("ids");
+
+  if (ids) {
+    // Bulk delete: ?ids=id1,id2,id3
+    const idList = ids.split(",").filter(Boolean);
+    for (const videoId of idList) {
+      await repo.videos.delete(videoId);
+    }
+    return NextResponse.json({ deleted: idList.length });
+  }
+
+  if (id) {
+    await repo.videos.delete(id);
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ error: "id or ids required" }, { status: 400 });
+}

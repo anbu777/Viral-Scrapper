@@ -83,18 +83,29 @@ export function normalizeAnalysis(input: unknown): VideoAnalysis {
 }
 
 export function makeFallbackAnalysis(transcript = "", summary = ""): VideoAnalysis {
+  // Detect raw metadata strings like "@username, 1355265 views, 65430 likes, caption: ..."
+  // These should not be shown as the summary — they are not meaningful analysis.
+  const isRawMetadata = /^@\w+,\s*\d+\s*views/i.test(summary);
+  const cleanSummary = isRawMetadata || !summary
+    ? "Analysis generated from available metadata only. Full video analysis requires successful video download."
+    : summary;
+
+  const hookFromTranscript = transcript
+    ? transcript.split(/[.!?\n]/)[0]?.trim().slice(0, 160)
+    : "";
+
   return {
-    hook: transcript.split(/[.!?]/)[0]?.slice(0, 160) || "Hook unavailable",
-    summary: summary || "Analysis generated from available metadata only.",
-    transcript,
+    hook: hookFromTranscript || "Hook not available — video could not be fully analyzed",
+    summary: cleanSummary,
+    transcript: transcript || "",
     ocrText: "",
-    visualPattern: "Unknown",
+    visualPattern: "Unknown — video not available for visual analysis",
     pacing: "Unknown",
     formatPattern: "Unknown",
     audience: "Unknown",
     viralMechanics: [],
     riskFlags: [],
-    sourceEvidence: transcript ? ["Transcript"] : ["Metadata"],
+    sourceEvidence: transcript ? ["Transcript"] : ["Metadata only"],
   };
 }
 

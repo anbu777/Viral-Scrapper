@@ -35,7 +35,7 @@ export function isPostgresDatabaseUrl(url: string): boolean {
 
 export function getSqlitePath(databaseUrl = getEnv().DATABASE_URL): string {
   const value = databaseUrl.startsWith("file:") ? databaseUrl.slice(5) : databaseUrl;
-  return path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
+  return path.isAbsolute(value) ? value : path.resolve(/* turbopackIgnore: true */ process.cwd(), value);
 }
 
 export function getEnvReport() {

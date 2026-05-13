@@ -26,6 +26,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "videoAnalysis is required" }, { status: 400 });
     }
 
+    const sourceVideo = videoId ? await repo.videos.find(videoId) : null;
+    if (sourceVideo?.analysisStatus && sourceVideo.analysisStatus !== "ok") {
+      return NextResponse.json(
+        { error: "Generate a successful video analysis first. Current analysis is fallback/failed." },
+        { status: 409 }
+      );
+    }
+
     // Load voice profile: prefer per-avatar, fall back to global, then hardcoded defaults
     const fallback = {
       niche: "Business / Finance",

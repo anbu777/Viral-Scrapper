@@ -7,7 +7,7 @@ import { getInstagramProvider, getProviderForPlatform, logProviderCall } from "@
 import { classifyProviderError } from "@/lib/providers/errors";
 import { calculateViralityScore } from "@/lib/ranking";
 import { analyzeWithProvider, generateScriptVariants } from "@/lib/ai-providers";
-import { uploadVideo, generateNewConcepts } from "@/lib/gemini";
+import { uploadVideo, generateNewConcepts, pingGemini } from "@/lib/gemini";
 import { analyzeVideoToStructuredJson, transcribeVideoWithGemini } from "@/lib/gemini-json-analysis";
 import { withBackoff } from "@/lib/retry";
 import { readVoiceProfile } from "@/lib/csv";
@@ -181,7 +181,7 @@ async function analyzeOneVideo(
       analysisJson: JSON.stringify(analysis),
     });
 
-    if (params.autoGenerateScripts) {
+    if (params.autoGenerateScripts && analysisStatus === "ok") {
       const variants = await generateScriptVariants({
         provider: params.aiProvider!,
         analysis,
@@ -207,7 +207,7 @@ async function analyzeOneVideo(
           sourceInspiration: variant.sourceInspiration,
           similarityScore: variant.similarityScore,
           qualityScore: variant.qualityScore,
-          platform: "instagram",
+          platform: videoPlatform,
           estimatedDuration: `${variant.estimatedDurationSeconds}s`,
           estimatedDurationSeconds: variant.estimatedDurationSeconds,
           contentType: "AI Variant",
@@ -257,6 +257,10 @@ export async function processPipelineRun(runId: string) {
     const configs = await repo.configs.list();
     const config = configs.find((item) => item.configName === params.configName);
     if (!config) throw new Error(`Config "${params.configName}" not found`);
+    if (params.autoAnalysis !== false && params.aiProvider === "gemini") {
+      const gemini = await pingGemini();
+      if (!gemini.ok) throw new Error(`Gemini is not ready: ${gemini.message}`);
+    }
 
     const selectedVideos: Video[] = [];
 

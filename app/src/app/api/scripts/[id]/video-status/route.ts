@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readScripts, updateScript } from "@/lib/csv";
+import { repo } from "@/db/repositories";
 import { getKling3Status } from "@/lib/fal";
 import { sendVideoForApproval } from "@/lib/telegram";
 
@@ -13,7 +13,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const scripts = readScripts();
+    const scripts = await repo.scripts.list();
     const script = scripts.find((s) => s.id === id);
     if (!script) return NextResponse.json({ error: "Script not found" }, { status: 404 });
 
@@ -33,7 +33,7 @@ export async function GET(
     const jobStatus = await getKling3Status(script.videoJobId);
 
     if (jobStatus.status === "failed") {
-      updateScript(id, { videoStatus: "failed" });
+      await repo.scripts.update(id, { videoStatus: "failed" });
       return NextResponse.json({ status: "failed", error: jobStatus.error });
     }
 
@@ -47,7 +47,7 @@ export async function GET(
 
     // PRIMARY guard: re-read script fresh from CSV
     // Catches server restarts/hot-reloads that reset the in-memory Set, and multi-process races
-    const freshScript = readScripts().find((s) => s.id === id);
+    const freshScript = (await repo.scripts.list()).find((s) => s.id === id);
     if (!freshScript || freshScript.videoStatus !== "processing") {
       console.log(`[video-status] ${id} already handled (${freshScript?.videoStatus}) — skipping`);
       return NextResponse.json({
@@ -64,7 +64,7 @@ export async function GET(
     completingIds.add(id);
 
     // Immediately claim — any subsequent poll hits the terminal-state check at the top
-    updateScript(id, { videoStatus: "awaiting_approval", videoUrl: klingVideoUrl });
+    await repo.scripts.update(id, { videoStatus: "awaiting_approval", videoUrl: klingVideoUrl });
 
     try {
       // ── Step 1: Download the raw Kling video ───────────────────────────────
@@ -100,8 +100,9 @@ export async function GET(
         }
       }
 
-      // TTS fallback: used for scripts, or clones where source audio extraction failed
-      if (!audioBuffer && process.env.ELEVENLABS_API_KEY) {
+      // TTS fallback: used for scripts, or clones where source audio extraction failed.
+      // generateAudioMp3 uses ElevenLabs when configured and free Edge TTS otherwise.
+      if (!audioBuffer) {
         try {
           const { extractSpokenText } = await import("@/lib/scriptutils");
           const { generateAudioMp3 } = await import("@/lib/tts");

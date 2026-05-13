@@ -207,6 +207,12 @@ function migrateSqliteIncrementalColumns() {
   if (!runNames.has("cancel_requested")) {
     db.exec(`ALTER TABLE scrape_runs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0`);
   }
+  // Add aliases column to creators table if missing
+  const creatorCols = db.prepare("PRAGMA table_info(creators)").all() as { name: string }[];
+  const creatorNames = new Set(creatorCols.map((c) => c.name));
+  if (!creatorNames.has("aliases")) {
+    db.exec(`ALTER TABLE creators ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'`);
+  }
 }
 
 export function migrateDb() {

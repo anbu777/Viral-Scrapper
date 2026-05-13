@@ -10,6 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import pLimit from "p-limit";
 import type { ScrapedReel, SocialPlatform } from "@/lib/types";
 import { repo } from "@/db/repositories";
 import { extractShortcode } from "@/lib/providers/instagram";
@@ -29,19 +30,28 @@ const ImportSchema = z.object({
   })).min(1),
 });
 
+type EnrichmentResult = {
+  url: string;
+  status: "enriched" | "basic" | "skipped";
+  platform?: SocialPlatform;
+  error?: string;
+  creator?: string;
+};
+
 async function buildReel(
   url: string,
   platform: SocialPlatform,
   creator: string,
   caption: string | undefined,
   shortcode: string,
-  ytdlpAvailable: boolean
-): Promise<ScrapedReel> {
+  ytdlpAvailable: boolean,
+  detectedUsername?: string
+): Promise<{ reel: ScrapedReel; enrichmentStatus: "enriched" | "basic"; enrichmentError?: string }> {
   const base: ScrapedReel = {
     platform,
     sourcePostUrl: url,
     shortcode,
-    creatorUsername: creator,
+    creatorUsername: creator !== "manual" ? creator : (detectedUsername || creator),
     caption: caption || "",
     thumbnailUrl: "",
     videoFileUrl: null,
@@ -52,27 +62,43 @@ async function buildReel(
     rawProviderPayload: { manualImport: true, platform },
   };
 
-  /** TikTok / YouTube always need yt-dlp enrichment; Instagram can use it too when installed (direct video URL for Gemini). */
-  if (!ytdlpAvailable) return base;
+  /** TikTok / YouTube always need yt-dlp enrichment; Instagram can use it too when installed. */
+  if (!ytdlpAvailable) {
+    return {
+      reel: base,
+      enrichmentStatus: "basic",
+      enrichmentError: "yt-dlp not installed — imported without thumbnails/stats",
+    };
+  }
 
   try {
     const meta = await getVideoMetadata(url);
+    const enrichedCreator = meta.uploader || detectedUsername || creator;
     return {
-      ...base,
-      shortcode: meta.id || shortcode,
-      creatorUsername: meta.uploader || creator,
-      caption: caption || meta.title || meta.description || "",
-      thumbnailUrl: meta.thumbnail || "",
-      videoFileUrl: meta.videoUrl || null,
-      postedAt: meta.uploadDate || "",
-      views: meta.viewCount ?? 0,
-      likes: meta.likeCount ?? 0,
-      comments: meta.commentCount ?? 0,
-      durationSeconds: meta.durationSeconds,
-      rawProviderPayload: { manualImport: true, platform, ytdlp: meta.raw },
+      reel: {
+        ...base,
+        shortcode: meta.id || shortcode,
+        creatorUsername: enrichedCreator !== "manual" ? enrichedCreator : base.creatorUsername,
+        caption: caption || meta.title || meta.description || "",
+        thumbnailUrl: meta.thumbnail || "",
+        videoFileUrl: meta.videoUrl || null,
+        postedAt: meta.uploadDate || "",
+        views: meta.viewCount ?? 0,
+        likes: meta.likeCount ?? 0,
+        comments: meta.commentCount ?? 0,
+        durationSeconds: meta.durationSeconds,
+        rawProviderPayload: { manualImport: true, platform, ytdlp: meta.raw },
+      },
+      enrichmentStatus: "enriched",
     };
-  } catch {
-    return base;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[import] yt-dlp enrichment failed for ${url}: ${message}`);
+    return {
+      reel: base,
+      enrichmentStatus: "basic",
+      enrichmentError: message,
+    };
   }
 }
 
@@ -90,31 +116,56 @@ export async function POST(request: Request) {
 
   const ytdlpAvailable = await isYtdlpAvailable();
   const skipped: Array<{ url: string; reason: string }> = [];
+  const enrichmentResults: EnrichmentResult[] = [];
 
-  const imported = await Promise.all(parsed.data.urls.map(async (item) => {
-    const detected = detectPlatform(item.url);
-    const platform = (item.platform ?? (detected.platform === "unknown" ? null : detected.platform)) as SocialPlatform | null;
-    if (!platform) {
-      skipped.push({ url: item.url, reason: "unrecognized URL (not Instagram, TikTok, or YouTube Shorts)" });
-      return null;
-    }
+  // Rate-limit yt-dlp calls: max 3 concurrent to avoid throttling/timeouts
+  const limit = pLimit(3);
+  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-    const shortcode = platform === "instagram"
-      ? extractShortcode(item.url) || detected.shortcode
-      : detected.shortcode;
+  const imported = await Promise.all(parsed.data.urls.map((item, idx) =>
+    limit(async () => {
+      // Add small delay between batches to avoid rate limiting
+      if (idx > 0 && idx % 3 === 0) await delay(500);
 
-    const reel = await buildReel(item.url, platform, item.creator, item.caption, shortcode, ytdlpAvailable);
+      const detected = detectPlatform(item.url);
+      const platform = (item.platform ?? (detected.platform === "unknown" ? null : detected.platform)) as SocialPlatform | null;
+      if (!platform) {
+        skipped.push({ url: item.url, reason: "unrecognized URL (not Instagram, TikTok, or YouTube Shorts)" });
+        enrichmentResults.push({ url: item.url, status: "skipped", error: "unrecognized URL" });
+        return null;
+      }
 
-    return repo.videos.upsertScraped(reel, {
-      configName: parsed.data.configName,
-      provider: platform === "instagram" ? "manual" : platform === "tiktok" ? "tiktok" : "youtube",
-      selectedForAnalysis: true,
-    });
-  }));
+      const shortcode = platform === "instagram"
+        ? extractShortcode(item.url) || detected.shortcode
+        : detected.shortcode;
+
+      // Use normalised URL for yt-dlp (fixes YouTube watch?v= → /shorts/ format)
+      const urlForEnrichment = detected.normalisedUrl || item.url;
+
+      const { reel, enrichmentStatus, enrichmentError } = await buildReel(
+        urlForEnrichment, platform, item.creator, item.caption, shortcode, ytdlpAvailable, detected.detectedUsername
+      );
+
+      enrichmentResults.push({
+        url: item.url,
+        status: enrichmentStatus,
+        platform,
+        error: enrichmentError,
+        creator: reel.creatorUsername,
+      });
+
+      return repo.videos.upsertScraped(reel, {
+        configName: parsed.data.configName,
+        provider: platform === "instagram" ? "manual" : platform === "tiktok" ? "tiktok" : "youtube",
+        selectedForAnalysis: true,
+      });
+    })
+  ));
 
   return NextResponse.json({
     imported: imported.filter(Boolean).length,
     skipped,
+    enrichmentResults,
     videos: imported,
     ytdlpAvailable,
   });

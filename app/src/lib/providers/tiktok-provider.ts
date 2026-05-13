@@ -17,10 +17,15 @@ import {
   getVideoMetadata,
   isYtdlpAvailable,
   listChannelVideos,
+  listChannelVideosWithProfile,
   type YtdlpMetadata,
 } from "./ytdlp";
 
-const TIKTOK_PROFILE_URL = (username: string) => `https://www.tiktok.com/@${username.replace(/^@/, "")}`;
+function tiktokProfileUrl(usernameOrUrl: string) {
+  const value = usernameOrUrl.trim();
+  if (/^https?:\/\//i.test(value) || value.startsWith("tiktokuser:")) return value;
+  return `https://www.tiktok.com/@${value.replace(/^@/, "")}`;
+}
 
 function metadataToReel(meta: YtdlpMetadata, fallbackUsername: string): ScrapedReel {
   return {
@@ -50,30 +55,72 @@ function filterByDays(reels: ScrapedReel[], nDays: number): ScrapedReel[] {
   });
 }
 
+function tiktokError(error: unknown, username: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/secondary user ID|channel_id|tiktokuser/i.test(message)) {
+    return new ProviderError(
+      "VALIDATION_ERROR",
+      `yt-dlp cannot resolve TikTok profile "${username}" by handle. Add/import a real TikTok video URL first, or edit this creator username to yt-dlp's tiktokuser:CHANNEL_ID format if you know the channel id. Original error: ${message}`
+    );
+  }
+  return error;
+}
+
 export const tiktokProvider: InstagramScraperProvider = {
   name: "tiktok",
-  async scrapeCreatorStats(username: string): Promise<CreatorStats> {
+  async scrapeCreatorStats(username: string): Promise<CreatorStats & { detectedAlias?: string }> {
     if (!(await isYtdlpAvailable())) {
       throw new ProviderError("PROVIDER_AUTH", "yt-dlp is required for the TikTok provider.");
     }
-    const reels = await listChannelVideos(TIKTOK_PROFILE_URL(username), 12, false);
-    const recent = reels.slice(0, 30);
-    const avgViews30d = recent.length
-      ? Math.round(recent.reduce((sum, r) => sum + (r.viewCount ?? 0), 0) / recent.length)
+    let listing;
+    try {
+      // Use hydrate: false to avoid downloading metadata per video (much faster, avoids timeouts)
+      listing = await listChannelVideosWithProfile(tiktokProfileUrl(username), 12, false);
+    } catch (error) {
+      const wrapped = tiktokError(error, username);
+      // Graceful fallback: return empty stats instead of hard error for handle resolution failures
+      if (wrapped instanceof ProviderError && wrapped.code === "VALIDATION_ERROR") {
+        console.warn(`[tiktok-provider] Handle resolution failed for "${username}", returning partial stats. Error: ${wrapped.message}`);
+        return {
+          profilePicUrl: "",
+          followers: 0,
+          reelsCount30d: 0,
+          avgViews30d: 0,
+        };
+      }
+      throw wrapped;
+    }
+    const recent = listing.items.slice(0, 30);
+    // Only count items with valid view counts for average calculation
+    const validViews = recent.filter(r => (r.viewCount ?? 0) > 0);
+    const avgViews30d = validViews.length
+      ? Math.round(validViews.reduce((sum, r) => sum + (r.viewCount ?? 0), 0) / validViews.length)
       : 0;
     const firstThumb = recent.find((r) => typeof r.thumbnail === "string" && r.thumbnail);
+    // Auto-detect alias: if yt-dlp resolved a different uploader name, return it
+    const resolvedUploader = listing.uploader?.replace(/^@/, "");
+    const normalizedInput = username.replace(/^@/, "").toLowerCase();
+    const detectedAlias = resolvedUploader && resolvedUploader.toLowerCase() !== normalizedInput
+      ? resolvedUploader
+      : undefined;
     return {
-      profilePicUrl: firstThumb?.thumbnail || "",
-      followers: 0,
+      profilePicUrl: listing.profilePicUrl || firstThumb?.thumbnail || "",
+      followers: listing.followerCount,
       reelsCount30d: recent.length,
       avgViews30d,
+      detectedAlias,
     };
   },
   async scrapeReels(input: ScrapeReelsInput): Promise<ScrapedReel[]> {
     if (!(await isYtdlpAvailable())) {
       throw new ProviderError("PROVIDER_AUTH", "yt-dlp is required for the TikTok provider.");
     }
-    const items = await listChannelVideos(TIKTOK_PROFILE_URL(input.username), Math.max(input.maxVideos, 6), true);
+    let items;
+    try {
+      items = await listChannelVideos(tiktokProfileUrl(input.username), Math.max(input.maxVideos, 6), true);
+    } catch (error) {
+      throw tiktokError(error, input.username);
+    }
     const reels = items.map((m) => metadataToReel(m, input.username));
     return filterByDays(reels, input.nDays).slice(0, input.maxVideos);
   },

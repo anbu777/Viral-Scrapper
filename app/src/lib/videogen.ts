@@ -65,8 +65,6 @@ export async function uploadDIDImage(imageBuffer: Buffer, mimeType = "image/jpeg
  * @returns Public audio URL hosted by D-ID
  */
 export async function uploadDIDAudio(audioBuffer: Buffer): Promise<string> {
-  const apiKey = getApiKey();
-
   const formData = new FormData();
   const blob = new Blob([new Uint8Array(audioBuffer)], { type: "audio/mpeg" });
   formData.append("audio", blob, "audio.mp3");

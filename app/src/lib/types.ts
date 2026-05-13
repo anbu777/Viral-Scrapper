@@ -17,6 +17,8 @@ export interface Creator {
   reelsCount30d: number;
   avgViews30d: number;
   lastScrapedAt: string;
+  /** Alternative usernames for cross-platform matching (e.g. "timothy_ronald" on YT, "timothyronald" on TikTok). */
+  aliases?: string[];
 }
 
 export interface CreatorStats {

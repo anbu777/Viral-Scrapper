@@ -6,10 +6,15 @@ const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 200;
 
 function clientKey(req: NextRequest) {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    "local"
+  );
 }
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
   if (path.startsWith("/api/telegram/webhook")) {
@@ -27,7 +32,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (path.startsWith("/api/")) {
+  if (process.env.NODE_ENV !== "development" && path.startsWith("/api/")) {
     const k = clientKey(req);
     const now = Date.now();
     const b = rateBucket.get(k);

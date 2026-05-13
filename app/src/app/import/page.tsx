@@ -36,6 +36,7 @@ export default function ImportPage() {
   const [urls, setUrls] = useState("");
   const [result, setResult] = useState<string>("");
   const [skipped, setSkipped] = useState<Array<{ url: string; reason: string }>>([]);
+  const [enrichResults, setEnrichResults] = useState<Array<{ url: string; status: string; platform?: string; error?: string; creator?: string }>>([]);
   const [loading, setLoading] = useState(false);
 
   const parsedUrls = useMemo(() => {
@@ -61,6 +62,7 @@ export default function ImportPage() {
     setLoading(true);
     setResult("");
     setSkipped([]);
+    setEnrichResults([]);
     try {
       const payload = {
         configName,
@@ -82,6 +84,7 @@ export default function ImportPage() {
       }
       setResult(`Imported ${data.imported ?? 0} video${(data.imported ?? 0) === 1 ? "" : "s"}.`);
       if (Array.isArray(data.skipped) && data.skipped.length) setSkipped(data.skipped);
+      if (Array.isArray(data.enrichmentResults)) setEnrichResults(data.enrichmentResults);
       if (data.ytdlpAvailable === false && (previewCounts.tiktok + previewCounts.youtube_shorts) > 0) {
         setResult((prev) => `${prev} Note: yt-dlp is not installed, so TikTok/YouTube videos were imported without thumbnails or view counts.`);
       }
@@ -159,6 +162,25 @@ export default function ImportPage() {
         </Button>
 
         {result && <p className="text-sm text-muted-foreground">{result}</p>}
+
+        {enrichResults.length > 0 && (
+          <div className="rounded-xl border border-border/40 bg-card/50 p-3 text-xs space-y-1.5">
+            <p className="font-medium text-foreground">Import details:</p>
+            {enrichResults.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 font-mono truncate">
+                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                  r.status === "enriched" ? "bg-green-500" : r.status === "basic" ? "bg-yellow-500" : "bg-red-500"
+                }`} />
+                <span className="text-muted-foreground truncate max-w-[280px]">{r.url.replace(/^https?:\/\//, "")}</span>
+                <span className={r.status === "enriched" ? "text-green-400" : r.status === "basic" ? "text-yellow-400" : "text-red-400"}>
+                  {r.status === "enriched" ? "✓ Full metadata" : r.status === "basic" ? "⚠ Basic (no yt-dlp)" : "✗ Skipped"}
+                </span>
+                {r.creator && r.creator !== "manual" && <span className="text-neon">@{r.creator}</span>}
+                {r.error && <span className="text-red-400/70 truncate max-w-[200px]" title={r.error}>— {r.error}</span>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {skipped.length > 0 && (
           <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs space-y-1">

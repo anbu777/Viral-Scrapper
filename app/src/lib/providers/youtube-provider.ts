@@ -18,6 +18,7 @@ import {
   getVideoMetadata,
   isYtdlpAvailable,
   listChannelVideos,
+  listChannelVideosWithProfile,
   type YtdlpMetadata,
 } from "./ytdlp";
 
@@ -29,9 +30,10 @@ function channelShortsUrl(usernameOrChannel: string): string {
 }
 
 function metadataToReel(meta: YtdlpMetadata, fallbackUsername: string): ScrapedReel {
+  const sourcePostUrl = meta.id ? `https://www.youtube.com/shorts/${meta.id}` : meta.url;
   return {
     platform: "youtube_shorts",
-    sourcePostUrl: meta.url,
+    sourcePostUrl,
     shortcode: meta.id,
     creatorUsername: (meta.uploader || fallbackUsername).replace(/^@/, ""),
     caption: meta.title || meta.description || "",
@@ -58,20 +60,49 @@ function filterByDays(reels: ScrapedReel[], nDays: number): ScrapedReel[] {
 
 export const youtubeProvider: InstagramScraperProvider = {
   name: "youtube",
-  async scrapeCreatorStats(username: string): Promise<CreatorStats> {
+  async scrapeCreatorStats(username: string): Promise<CreatorStats & { detectedAlias?: string }> {
     if (!(await isYtdlpAvailable())) {
       throw new ProviderError("PROVIDER_AUTH", "yt-dlp is required for the YouTube Shorts provider.");
     }
-    const items = await listChannelVideos(channelShortsUrl(username), 12, false);
-    const avgViews30d = items.length
-      ? Math.round(items.reduce((sum, r) => sum + (r.viewCount ?? 0), 0) / items.length)
+    let listing;
+    try {
+      listing = await listChannelVideosWithProfile(channelShortsUrl(username), 12, false);
+    } catch (error) {
+      // Graceful fallback: if shorts tab fails, try /videos tab
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`[youtube-provider] Shorts listing failed for "${username}", trying /videos: ${msg}`);
+      try {
+        const videosUrl = channelShortsUrl(username).replace(/\/shorts$/, "/videos");
+        listing = await listChannelVideosWithProfile(videosUrl, 12, false);
+      } catch {
+        // Both failed — return empty stats instead of crashing
+        console.warn(`[youtube-provider] Both shorts and videos listing failed for "${username}", returning partial stats.`);
+        return {
+          profilePicUrl: "",
+          followers: 0,
+          reelsCount30d: 0,
+          avgViews30d: 0,
+        };
+      }
+    }
+    // Only count items with valid view counts for accurate average
+    const validItems = listing.items.filter(r => (r.viewCount ?? 0) > 0);
+    const avgViews30d = validItems.length
+      ? Math.round(validItems.reduce((sum, r) => sum + (r.viewCount ?? 0), 0) / validItems.length)
       : 0;
-    const firstThumb = items.find((r) => typeof r.thumbnail === "string" && r.thumbnail);
+    const firstThumb = listing.items.find((r) => typeof r.thumbnail === "string" && r.thumbnail);
+    // Auto-detect alias
+    const resolvedUploader = listing.uploader?.replace(/^@/, "");
+    const normalizedInput = username.replace(/^@/, "").toLowerCase();
+    const detectedAlias = resolvedUploader && resolvedUploader.toLowerCase() !== normalizedInput
+      ? resolvedUploader
+      : undefined;
     return {
-      profilePicUrl: firstThumb?.thumbnail || "",
-      followers: 0,
-      reelsCount30d: items.length,
+      profilePicUrl: listing.profilePicUrl || firstThumb?.thumbnail || "",
+      followers: listing.followerCount,
+      reelsCount30d: listing.items.length,
       avgViews30d,
+      detectedAlias,
     };
   },
   async scrapeReels(input: ScrapeReelsInput): Promise<ScrapedReel[]> {

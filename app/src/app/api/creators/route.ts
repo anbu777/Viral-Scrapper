@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { z } from "zod";
 import { repo } from "@/db/repositories";
-import { getProviderForPlatform } from "@/lib/providers";
+import { getStatsProviderForPlatform } from "@/lib/providers";
 import type { Creator, SocialPlatform } from "@/lib/types";
 
 const PlatformEnum = z.enum(["instagram", "tiktok", "youtube_shorts"]);
@@ -51,24 +51,50 @@ export async function POST(request: Request) {
     lastScrapedAt: "",
   };
 
+  // Always save the creator first — stats scrape is best-effort
   await repo.creators.upsert(newCreator);
 
+  let warning: string | undefined;
   try {
-    const provider = getProviderForPlatform(platform);
+    const provider = getStatsProviderForPlatform(platform);
     const stats = await provider.scrapeCreatorStats(newCreator.username);
+
+    // Auto-detect aliases: if yt-dlp resolved a different uploader name, add it
+    const aliases: string[] = [];
+    const detectedAlias = (stats as { detectedAlias?: string }).detectedAlias;
+    if (detectedAlias) {
+      aliases.push(detectedAlias);
+    }
+
+    // Merge with any existing aliases (in case of upsert on existing creator)
+    const existingCreators = await repo.creators.list();
+    const existingCreator = existingCreators.find(
+      c => c.platform === platform && c.username === newCreator.username
+    );
+    const existingAliases = existingCreator?.aliases || [];
+    const mergedAliases = [...new Set([...existingAliases, ...aliases])];
+
     const updated = await repo.creators.update(newCreator.id, {
       profilePicUrl: stats.profilePicUrl,
       followers: stats.followers,
       reelsCount30d: stats.reelsCount30d,
       avgViews30d: stats.avgViews30d,
       lastScrapedAt: new Date().toISOString(),
+      ...(mergedAliases.length > 0 ? { aliases: mergedAliases } : {}),
     });
-    return NextResponse.json(updated, { status: 201 });
+
+    if (stats.followers === 0 && stats.reelsCount30d === 0) {
+      warning = `Creator saved but stats could not be fully scraped. Try importing a video URL first, then refresh stats.`;
+    }
+
+    return NextResponse.json({ ...(updated || newCreator), warning }, { status: 201 });
   } catch (err) {
-    console.error(`Failed to scrape stats for @${newCreator.username} on ${platform}:`, err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to scrape stats for @${newCreator.username} on ${platform}:`, errorMsg);
+    warning = `Creator saved but stats scraping failed: ${errorMsg}. You can try refreshing later.`;
   }
 
-  return NextResponse.json(newCreator, { status: 201 });
+  return NextResponse.json({ ...newCreator, warning }, { status: 201 });
 }
 
 export async function PUT(request: Request) {

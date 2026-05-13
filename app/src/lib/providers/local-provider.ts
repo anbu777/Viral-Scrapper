@@ -8,9 +8,13 @@ import type { InstagramScraperProvider, ScrapeReelsInput } from "./instagram";
 import { downloadByUrl } from "./instagram";
 import { ProviderError } from "./errors";
 
-async function withInstagramPage<T>(fn: (page: Page) => Promise<T>) {
+function localProfileDir() {
   const env = getEnv();
-  const profileDir = path.resolve(process.cwd(), env.LOCAL_BROWSER_PROFILE_DIR);
+  return path.resolve(/* turbopackIgnore: true */ process.cwd(), env.LOCAL_BROWSER_PROFILE_DIR);
+}
+
+async function withInstagramPage<T>(fn: (page: Page) => Promise<T>) {
+  const profileDir = localProfileDir();
   await mkdir(profileDir, { recursive: true });
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
@@ -83,8 +87,7 @@ export const localProvider: InstagramScraperProvider = {
     return downloadByUrl(input.videoFileUrl);
   },
   async validateSession() {
-    const env = getEnv();
-    const profileDir = path.resolve(process.cwd(), env.LOCAL_BROWSER_PROFILE_DIR);
+    const profileDir = localProfileDir();
     if (!existsSync(profileDir)) {
       return {
         status: "login_required",

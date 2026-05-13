@@ -46,13 +46,13 @@ export async function scrapeReels(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         addParentData: false,
-        directUrls: [`https://www.instagram.com/${username}/`],
+        directUrls: [`https://www.instagram.com/${username}/reels/`],
         enhanceUserSearchWithFacebookPage: false,
-        isUserReelFeedURL: false,
+        isUserReelFeedURL: true,
         isUserTaggedFeedURL: false,
         onlyPostsNewerThan: sinceDate,
         resultsLimit: maxVideos,
-        resultsType: "stories",
+        resultsType: "posts",
       }),
     }
   );
@@ -75,7 +75,7 @@ export async function refreshVideoUrl(postUrl: string): Promise<string | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         directUrls: [postUrl],
-        resultsType: "reels",
+        resultsType: "posts",
         resultsLimit: 1,
       }),
     }
@@ -126,11 +126,12 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        directUrls: [`https://www.instagram.com/${username}/`],
-        resultsType: "stories",
+        directUrls: [`https://www.instagram.com/${username}/reels/`],
+        resultsType: "posts",
         resultsLimit: 100,
         onlyPostsNewerThan: sinceDate,
         addParentData: false,
+        isUserReelFeedURL: true,
       }),
     }
   );
@@ -144,9 +145,11 @@ export async function scrapeCreatorStats(username: string): Promise<CreatorStats
 
   // Filter to only video posts within 30 days
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const recentReels = posts.filter(
-    (p) => p.videoUrl && p.timestamp && new Date(p.timestamp) >= cutoff
-  );
+  const recentReels = posts.filter((p) => {
+    const isRecent = p.timestamp && new Date(p.timestamp) >= cutoff;
+    const looksLikeReel = Boolean(p.videoUrl) || (p.videoPlayCount || 0) > 0 || /\/reel\//i.test(p.url || "");
+    return isRecent && looksLikeReel;
+  });
 
   const reelsCount30d = recentReels.length;
   const avgViews30d = reelsCount30d > 0

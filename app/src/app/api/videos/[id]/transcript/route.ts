@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { repo } from "@/db/repositories";
 import { getEnv } from "@/lib/env";
-import { getInstagramProvider } from "@/lib/providers";
+import { getProviderForPlatform } from "@/lib/providers";
 import { transcribeWithProvider } from "@/lib/transcript-providers";
+import type { SocialPlatform } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -16,7 +17,7 @@ export async function POST(
     if (!video) return NextResponse.json({ error: "Video not found" }, { status: 404 });
     if (video.transcript) return NextResponse.json({ transcript: video.transcript });
 
-    const provider = getInstagramProvider();
+    const provider = getProviderForPlatform((video.platform as SocialPlatform) || "instagram");
     const downloaded = await provider.downloadVideo({ postUrl: video.link, videoFileUrl: video.videoFileUrl });
     const transcript = await transcribeWithProvider({
       provider: getEnv().TRANSCRIPT_PROVIDER,
@@ -28,6 +29,7 @@ export async function POST(
     return NextResponse.json({ transcript });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const status = /429|quota|rate/i.test(msg) ? 429 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

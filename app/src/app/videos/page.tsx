@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { VideoGridSkeleton } from "@/components/ui/loading-skeleton";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
 import {
   Heart, MessageCircle, Film, Search, Star, Play, ArrowUpDown,
   ExternalLink, Copy, Check, Video, Loader2, Send, CheckCircle2,
-  XCircle, RefreshCw, User, FileText, Download, Square, CheckSquare,
+  XCircle, RefreshCw, User, FileText, Download, Square, CheckSquare, Trash2,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown-content";
 import type { Video as VideoType, Config, AvatarProfile, Script } from "@/lib/types";
@@ -56,6 +57,7 @@ function VideosContent() {
   const [sortBy, setSortBy] = useState<SortOption>("date-added");
   const [modalVideo, setModalVideo] = useState<VideoType | null>(null);
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Avatar generation state
   const [avatars, setAvatars] = useState<AvatarProfile[]>([]);
@@ -148,8 +150,11 @@ function VideosContent() {
   };
 
   useEffect(() => {
-    fetch("/api/videos").then((r) => r.json()).then((d) => setVideos(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])).catch(() => {});
+    setLoading(true);
+    Promise.all([
+      fetch("/api/videos").then((r) => r.json()).then((d) => setVideos(Array.isArray(d) ? d : [])),
+      fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])),
+    ]).catch(() => {}).finally(() => setLoading(false));
     fetch("/api/avatars")
       .then((r) => r.json())
       .then((data: AvatarProfile[] | unknown) => {
@@ -309,12 +314,20 @@ function VideosContent() {
     openPicker(video);
   };
 
+  /** Normalize a username for fuzzy matching (strip @, dots, underscores, lowercase). */
+  const norm = (u: string) => u.toLowerCase().replace(/^@/, "").replace(/[._-]/g, "");
+
   const uniqueCreators = [...new Set(videos.map((v) => v.creator))].sort();
 
   const filtered = videos
     .filter((v) => {
       if (filterConfig !== "all" && v.configName !== filterConfig) return false;
-      if (filterCreator !== "all" && v.creator !== filterCreator) return false;
+      if (filterCreator !== "all") {
+        // Support comma-separated creator names (from alias-aware "View videos" links)
+        const filterNames = filterCreator.split(",").map(norm);
+        const videoCreator = norm(v.creator);
+        if (!filterNames.some((fn) => fn === videoCreator)) return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -370,6 +383,22 @@ function VideosContent() {
     a.download = `video-analyses-${new Date().toISOString().slice(0, 10)}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected video${selectedIds.size > 1 ? "s" : ""}? This cannot be undone.`)) return;
+    const ids = [...selectedIds].join(",");
+    await fetch(`/api/videos?ids=${encodeURIComponent(ids)}`, { method: "DELETE" });
+    setVideos((prev) => prev.filter((v) => !selectedIds.has(v.id || v.link)));
+    setSelectedIds(new Set());
+  };
+
+  const deleteVideo = async (id: string) => {
+    if (!confirm("Delete this video? This cannot be undone.")) return;
+    await fetch(`/api/videos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    setVideos((prev) => prev.filter((v) => v.id !== id));
+    setSelectedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
   };
 
   // ─── Per-card generation status UI ─────────────────────────────────────────
@@ -581,6 +610,15 @@ function VideosContent() {
                 <Download className="h-3.5 w-3.5" />
                 Download analyses (.md)
               </Button>
+              <Button
+                size="sm"
+                onClick={deleteSelected}
+                className="rounded-xl h-8 gap-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/30"
+                variant="ghost"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete selected
+              </Button>
               <button
                 onClick={() => setSelectedIds(new Set())}
                 className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
@@ -593,6 +631,9 @@ function VideosContent() {
       )}
 
       {/* Video Grid */}
+      {loading ? (
+        <VideoGridSkeleton />
+      ) : (<>
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
         {filtered.map((video) => {
           const id = video.id || video.link;
@@ -760,7 +801,7 @@ function VideosContent() {
         })}
       </div>
 
-      {filtered.length === 0 && (
+      {filtered.length === 0 && !loading && (
         <div className="glass rounded-2xl p-12 text-center">
           <Film className="mx-auto h-10 w-10 text-muted-foreground/30" />
           <h3 className="mt-4 font-semibold">No videos found</h3>
@@ -768,6 +809,8 @@ function VideosContent() {
             Run a pipeline analysis to generate results, or adjust your filters.
           </p>
         </div>
+      )}
+      </>
       )}
 
       {/* Analysis Modal */}

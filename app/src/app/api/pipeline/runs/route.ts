@@ -8,7 +8,7 @@ const PipelineRunSchema = z.object({
   maxVideos: z.number().int().min(1).max(100).default(20),
   topK: z.number().int().min(1).max(20).default(3),
   nDays: z.number().int().min(1).max(365).default(30),
-  scraperProvider: z.enum(["local", "apify", "manual", "meta"]).optional(),
+  scraperProvider: z.enum(["local", "apify", "manual", "meta", "tiktok", "youtube"]).optional(),
   aiProvider: z.enum(["ollama", "gemini", "claude"]).optional(),
   transcriptProvider: z.enum(["whisper-local", "gemini"]).optional(),
   videoProvider: z.enum(["none", "fal"]).optional(),

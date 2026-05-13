@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Play, Loader2, CheckCircle2, XCircle, Terminal, Zap, ChevronDown, ArrowRight, Film, AlertTriangle, FileText, Video, Brain, AlignLeft } from "lucide-react";
 import { usePipeline } from "@/context/pipeline-context";
-import type { Config } from "@/lib/types";
+import type { Config, ScraperProviderName } from "@/lib/types";
 
 function formatViews(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
@@ -34,10 +34,13 @@ export default function RunPage() {
   const [autoAnalysis, setAutoAnalysis] = useState(true);
   const [autoTranscript, setAutoTranscript] = useState(false);
   const [autoScripts, setAutoScripts] = useState(true);
-  const [autoVideos, setAutoVideos] = useState(true);
+  const [autoVideos, setAutoVideos] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [envScraperProvider, setEnvScraperProvider] = useState<string | null>(null);
+  const [scraperProvider, setScraperProvider] = useState<Extract<ScraperProviderName, "manual" | "apify" | "local" | "meta">>("manual");
+  const [apifyConfigured, setApifyConfigured] = useState(false);
+  const [falConfigured, setFalConfigured] = useState(false);
 
   const { running, progress, runPipeline } = usePipeline();
 
@@ -48,7 +51,17 @@ export default function RunPage() {
   useEffect(() => {
     fetch("/api/providers/health")
       .then((r) => r.json())
-      .then((d: { env?: { scraperProvider?: string } }) => setEnvScraperProvider(d?.env?.scraperProvider ?? null))
+      .then((d: { env?: { scraperProvider?: string; paidKeys?: { apify?: boolean; fal?: boolean } } }) => {
+        const envProvider = d?.env?.scraperProvider ?? "manual";
+        const hasApify = Boolean(d?.env?.paidKeys?.apify);
+        const hasFal = Boolean(d?.env?.paidKeys?.fal);
+        setEnvScraperProvider(envProvider);
+        setApifyConfigured(hasApify);
+        setFalConfigured(hasFal);
+        if (envProvider === "apify" || envProvider === "local" || envProvider === "meta" || envProvider === "manual") {
+          setScraperProvider(envProvider === "manual" && hasApify ? "apify" : envProvider);
+        }
+      })
       .catch(() => setEnvScraperProvider(null));
   }, []);
 
@@ -66,12 +79,14 @@ export default function RunPage() {
       autoAnalysis,
       autoTranscript,
       autoGenerateScripts: autoAnalysis && autoScripts,
-      autoGenerateVideos: autoAnalysis && autoScripts && autoVideos,
+      autoGenerateVideos: autoAnalysis && autoScripts && autoVideos && falConfigured,
       skipScraping: resumeMode,
+      scraperProvider,
     });
   };
 
-  const numPhases = 2 + (autoAnalysis && autoScripts ? 1 : 0) + (autoAnalysis && autoScripts && autoVideos ? 1 : 0);
+  const videosEnabled = autoAnalysis && autoScripts && autoVideos && falConfigured;
+  const numPhases = 2 + (autoAnalysis && autoScripts ? 1 : 0) + (videosEnabled ? 1 : 0);
   const phaseSize = 100 / numPhases;
 
   const totalProgress = (() => {
@@ -93,7 +108,7 @@ export default function RunPage() {
         </p>
       </div>
 
-      {envScraperProvider === "manual" && !resumeMode && (
+      {envScraperProvider === "manual" && scraperProvider === "manual" && !resumeMode && (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-amber-100/90 leading-relaxed">
           <p className="font-medium text-amber-200 mb-1">Scraper mode is <code className="text-neon">manual</code></p>
           <p className="text-muted-foreground">
@@ -138,6 +153,20 @@ export default function RunPage() {
 
           {showAdvanced && (
             <div className="grid gap-4 md:grid-cols-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div>
+                <Label className="text-xs text-muted-foreground">Instagram Scraper</Label>
+                <Select value={scraperProvider} onValueChange={(v) => setScraperProvider(v as typeof scraperProvider)}>
+                  <SelectTrigger className="mt-1.5 rounded-xl glass border-white/[0.08] h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="apify">Apify{apifyConfigured ? " (configured)" : ""}</SelectItem>
+                    <SelectItem value="manual">Manual import only</SelectItem>
+                    <SelectItem value="local">Local Playwright</SelectItem>
+                    <SelectItem value="meta">Meta stub</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Max Videos per Creator</Label>
                 <Input
@@ -255,9 +284,9 @@ export default function RunPage() {
               </label>
 
               {/* Auto Videos */}
-              <label className={`flex items-start gap-3 cursor-pointer group ${!autoAnalysis || !autoScripts ? "opacity-40 pointer-events-none" : ""}`}>
+              <label className={`flex items-start gap-3 cursor-pointer group ${!autoAnalysis || !autoScripts || !falConfigured ? "opacity-40 pointer-events-none" : ""}`}>
                 <div className="relative mt-0.5">
-                  <input type="checkbox" className="sr-only peer" checked={autoAnalysis && autoScripts && autoVideos} onChange={(e) => setAutoVideos(e.target.checked)} disabled={!autoAnalysis || !autoScripts} />
+                  <input type="checkbox" className="sr-only peer" checked={autoAnalysis && autoScripts && autoVideos && falConfigured} onChange={(e) => setAutoVideos(e.target.checked)} disabled={!autoAnalysis || !autoScripts || !falConfigured} />
                   <div className="h-5 w-9 rounded-full bg-white/[0.08] peer-checked:bg-neon transition-colors" />
                   <div className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </div>
@@ -265,8 +294,9 @@ export default function RunPage() {
                   <div className="flex items-center gap-1.5 text-xs font-medium">
                     <Video className="h-3 w-3 text-neon" />
                     Auto-generate videos
+                    {!falConfigured && <span className="text-[10px] font-normal text-muted-foreground bg-white/[0.05] border border-white/[0.08] rounded px-1.5 py-0.5">requires FAL_KEY</span>}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Queue D-ID lip-sync video jobs for each script → check Telegram for approval</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Queue fal.ai/Kling avatar jobs after scripts are generated. Requires FAL_KEY and Telegram approval setup.</p>
                 </div>
               </label>
             </div>

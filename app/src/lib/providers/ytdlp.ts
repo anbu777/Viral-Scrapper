@@ -16,8 +16,36 @@ import { existsSync } from "fs";
 import path from "path";
 import os from "os";
 import { promisify } from "util";
+import { withBackoff } from "@/lib/retry";
 
 const execFileAsync = promisify(execFile);
+
+/** Returns cookies file args if a platform-specific or general cookies file exists. */
+function getCookiesArgs(url: string): string[] {
+  const dataDir = path.join(process.cwd(), "..", "data", "cookies");
+  // Platform-specific cookies
+  const isTikTok = /tiktok\.com/i.test(url);
+  const isYouTube = /youtube\.com|youtu\.be/i.test(url);
+  const isInstagram = /instagram\.com/i.test(url);
+  
+  const candidates: string[] = [];
+  if (isTikTok) candidates.push(path.join(dataDir, "tiktok.txt"));
+  if (isYouTube) candidates.push(path.join(dataDir, "youtube.txt"));
+  if (isInstagram) candidates.push(path.join(dataDir, "instagram.txt"));
+  candidates.push(path.join(dataDir, "cookies.txt")); // Generic fallback
+  
+  // Also check YTDLP_COOKIES_PATH env var
+  const envPath = process.env.YTDLP_COOKIES_PATH?.trim();
+  if (envPath) {
+    const resolved = path.isAbsolute(envPath) ? envPath : path.resolve(process.cwd(), envPath);
+    candidates.unshift(resolved);
+  }
+  
+  for (const file of candidates) {
+    if (existsSync(file)) return ["--cookies", file];
+  }
+  return [];
+}
 
 /**
  * Returns common install locations to search when yt-dlp isn't on PATH yet.
@@ -87,6 +115,23 @@ export interface YtdlpMetadata {
   raw: Record<string, unknown>;
 }
 
+export interface YtdlpChannelListing {
+  items: YtdlpMetadata[];
+  followerCount: number;
+  profilePicUrl: string;
+  uploader: string;
+}
+
+function extractThumbnail(raw: Record<string, unknown>): string | undefined {
+  if (typeof raw.thumbnail === "string" && raw.thumbnail) return raw.thumbnail;
+  if (!Array.isArray(raw.thumbnails)) return undefined;
+  const thumbs = raw.thumbnails as Array<Record<string, unknown>>;
+  const sorted = thumbs
+    .filter((thumb) => typeof thumb.url === "string")
+    .sort((a, b) => Number(b.preference ?? 0) - Number(a.preference ?? 0));
+  return sorted[0]?.url ? String(sorted[0].url) : undefined;
+}
+
 function parseUploadDate(raw: Record<string, unknown>): string {
   const ts = raw.timestamp;
   if (typeof ts === "number" && ts > 0) {
@@ -105,37 +150,53 @@ function parseUploadDate(raw: Record<string, unknown>): string {
  * Throws if yt-dlp is missing or the URL is private/blocked.
  */
 export async function getVideoMetadata(url: string): Promise<YtdlpMetadata> {
-  const cmd = getYtdlpCommand();
-  let stdout: string;
-  try {
-    const result = await execFileAsync(cmd, [
+  return withBackoff(async () => {
+    const cmd = getYtdlpCommand();
+    const cookiesArgs = getCookiesArgs(url);
+    const args = [
       "--dump-single-json",
       "--no-warnings",
       "--skip-download",
+      ...cookiesArgs,
       url,
-    ], { maxBuffer: 50 * 1024 * 1024, timeout: 60_000 });
-    stdout = result.stdout;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`yt-dlp metadata failed for ${url}: ${message}`);
-  }
-  const data = JSON.parse(stdout) as Record<string, unknown>;
-  return {
-    id: String(data.id ?? ""),
-    url: String(data.webpage_url ?? url),
-    uploader: String(data.uploader_id ?? data.uploader ?? data.channel ?? "").replace(/^@/, ""),
-    uploaderId: data.uploader_id ? String(data.uploader_id) : undefined,
-    title: typeof data.title === "string" ? data.title : undefined,
-    description: typeof data.description === "string" ? data.description : undefined,
-    thumbnail: typeof data.thumbnail === "string" ? data.thumbnail : undefined,
-    videoUrl: typeof data.url === "string" ? data.url : undefined,
-    uploadDate: parseUploadDate(data),
-    durationSeconds: typeof data.duration === "number" ? data.duration : undefined,
-    viewCount: typeof data.view_count === "number" ? data.view_count : 0,
-    likeCount: typeof data.like_count === "number" ? data.like_count : 0,
-    commentCount: typeof data.comment_count === "number" ? data.comment_count : 0,
-    raw: data,
-  };
+    ];
+    let stdout: string;
+    try {
+      const result = await execFileAsync(cmd, args, { maxBuffer: 50 * 1024 * 1024, timeout: 90_000 });
+      stdout = result.stdout;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`yt-dlp metadata failed for ${url}: ${message}`);
+    }
+    const data = JSON.parse(stdout) as Record<string, unknown>;
+    return {
+      id: String(data.id ?? ""),
+      url: String(data.webpage_url ?? url),
+      uploader: String(data.uploader_id ?? data.uploader ?? data.channel ?? "").replace(/^@/, ""),
+      uploaderId: data.uploader_id ? String(data.uploader_id) : undefined,
+      title: typeof data.title === "string" ? data.title : undefined,
+      description: typeof data.description === "string" ? data.description : undefined,
+      thumbnail: extractThumbnail(data),
+      videoUrl: typeof data.url === "string" ? data.url : undefined,
+      uploadDate: parseUploadDate(data),
+      durationSeconds: typeof data.duration === "number" ? data.duration : undefined,
+      viewCount: typeof data.view_count === "number" ? data.view_count : 0,
+      likeCount: typeof data.like_count === "number" ? data.like_count : 0,
+      commentCount: typeof data.comment_count === "number" ? data.comment_count : 0,
+      raw: data,
+    };
+  }, {
+    retries: 3,
+    baseMs: 2000,
+    maxMs: 20_000,
+    shouldRetry: (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Never retry validation errors (handle resolution failures)
+      if (/secondary user ID|tiktokuser|channel_id|Unable to extract/i.test(msg)) return false;
+      // Retry transient errors
+      return /timed? ?out|ETIMEDOUT|ECONNRESET|429|503|502|504|fetch failed|rate/i.test(msg);
+    },
+  });
 }
 
 /**
@@ -150,39 +211,69 @@ export async function listChannelVideos(
   playlistEnd: number,
   hydrate = true
 ): Promise<YtdlpMetadata[]> {
+  return (await listChannelVideosWithProfile(channelUrl, playlistEnd, hydrate)).items;
+}
+
+export async function listChannelVideosWithProfile(
+  channelUrl: string,
+  playlistEnd: number,
+  hydrate = true
+): Promise<YtdlpChannelListing> {
   const cmd = getYtdlpCommand();
+  const cookiesArgs = getCookiesArgs(channelUrl);
   const args = [
     "--flat-playlist",
     "--dump-single-json",
     "--no-warnings",
     "--playlist-end", String(Math.max(1, playlistEnd)),
+    ...cookiesArgs,
     channelUrl,
   ];
-  let stdout: string;
-  try {
-    const result = await execFileAsync(cmd, args, { maxBuffer: 100 * 1024 * 1024, timeout: 120_000 });
-    stdout = result.stdout;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`yt-dlp listing failed for ${channelUrl}: ${message}`);
-  }
+
+  const stdout = await withBackoff(async () => {
+    try {
+      const result = await execFileAsync(cmd, args, { maxBuffer: 100 * 1024 * 1024, timeout: 180_000 });
+      return result.stdout;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`yt-dlp listing failed for ${channelUrl}: ${message}`);
+    }
+  }, {
+    retries: 2,
+    baseMs: 3000,
+    shouldRetry: (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/secondary user ID|tiktokuser|channel_id|Unable to extract/i.test(msg)) return false;
+      return /timed? ?out|ETIMEDOUT|ECONNRESET|429|503|502|504|fetch failed|rate/i.test(msg);
+    },
+  });
+
   const payload = JSON.parse(stdout) as Record<string, unknown>;
   const entries = Array.isArray(payload.entries) ? (payload.entries as Array<Record<string, unknown>>) : [];
 
+  const listingProfile = {
+    followerCount: typeof payload.channel_follower_count === "number" ? payload.channel_follower_count : 0,
+    profilePicUrl: extractThumbnail(payload) || "",
+    uploader: String(payload.uploader_id ?? payload.uploader ?? payload.channel ?? "").replace(/^@/, ""),
+  };
+
   if (!hydrate) {
-    return entries.map((entry) => ({
+    return {
+      ...listingProfile,
+      items: entries.map((entry) => ({
       id: String(entry.id ?? ""),
       url: String(entry.url ?? entry.webpage_url ?? ""),
       uploader: String(entry.uploader_id ?? entry.uploader ?? "").replace(/^@/, ""),
       title: typeof entry.title === "string" ? entry.title : undefined,
-      thumbnail: typeof entry.thumbnail === "string" ? entry.thumbnail : undefined,
+      thumbnail: extractThumbnail(entry),
       uploadDate: parseUploadDate(entry),
       durationSeconds: typeof entry.duration === "number" ? entry.duration : undefined,
       viewCount: typeof entry.view_count === "number" ? entry.view_count : 0,
       likeCount: typeof entry.like_count === "number" ? entry.like_count : 0,
       commentCount: typeof entry.comment_count === "number" ? entry.comment_count : 0,
       raw: entry,
-    }));
+      })),
+    };
   }
 
   const detailed: YtdlpMetadata[] = [];
@@ -197,7 +288,7 @@ export async function listChannelVideos(
       /* skip individual failures */
     }
   }
-  return detailed;
+  return { ...listingProfile, items: detailed };
 }
 
 /**
@@ -206,6 +297,7 @@ export async function listChannelVideos(
  */
 export async function downloadVideoToBuffer(url: string): Promise<{ buffer: Buffer; contentType: string }> {
   const cmd = getYtdlpCommand();
+  const cookiesArgs = getCookiesArgs(url);
   const dir = await mkdtemp(path.join(os.tmpdir(), "ytdlp-"));
   const outPath = path.join(dir, "video.mp4");
   try {
@@ -213,6 +305,7 @@ export async function downloadVideoToBuffer(url: string): Promise<{ buffer: Buff
       "-f", "mp4/bestvideo*+bestaudio/best",
       "--no-warnings",
       "--no-playlist",
+      ...cookiesArgs,
       "-o", outPath,
       url,
     ], { maxBuffer: 200 * 1024 * 1024, timeout: 5 * 60_000 });

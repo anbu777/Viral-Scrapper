@@ -1,5 +1,5 @@
 import { repo } from "@/db/repositories";
-import { getProviderForPlatform } from "@/lib/providers";
+import { getStatsProviderForPlatform } from "@/lib/providers";
 
 export const maxDuration = 300;
 
@@ -26,14 +26,23 @@ export async function POST(request: Request) {
             encoder.encode(`data: ${JSON.stringify({ type: "progress", username: creator.username, status: "scraping", platform: creator.platform })}\n\n`)
           );
 
-          const provider = getProviderForPlatform(creator.platform || "instagram");
+          const provider = getStatsProviderForPlatform(creator.platform || "instagram");
           const stats = await provider.scrapeCreatorStats(creator.username);
+
+          // Auto-detect aliases from resolved uploader name
+          const detectedAlias = (stats as { detectedAlias?: string }).detectedAlias;
+          const existingAliases = creator.aliases || [];
+          const newAliases = detectedAlias && !existingAliases.includes(detectedAlias)
+            ? [...existingAliases, detectedAlias]
+            : existingAliases;
+
           await repo.creators.update(creator.id, {
             profilePicUrl: stats.profilePicUrl,
             followers: stats.followers,
             reelsCount30d: stats.reelsCount30d,
             avgViews30d: stats.avgViews30d,
             lastScrapedAt: new Date().toISOString(),
+            ...(newAliases.length > 0 ? { aliases: newAliases } : {}),
           });
 
           controller.enqueue(

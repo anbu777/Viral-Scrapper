@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateScript, readScripts } from "@/lib/csv";
+import { repo } from "@/db/repositories";
 import { answerCallbackQuery, editMessageAfterAction } from "@/lib/telegram";
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Find the script
-    const scripts = readScripts();
+    const scripts = await repo.scripts.list();
     const script = scripts.find((s) => s.id === scriptId);
 
     if (!script) {
@@ -32,15 +32,15 @@ export async function POST(req: NextRequest) {
 
     // Apply action
     if (action === "approve") {
-      updateScript(scriptId, { videoStatus: "approved" });
+      await repo.scripts.update(scriptId, { videoStatus: "approved" });
       await answerCallbackQuery(callbackQueryId, "Video approved!");
       await editMessageAfterAction(messageId, "approve", script.title);
     } else if (action === "reject") {
-      updateScript(scriptId, { videoStatus: "rejected" });
+      await repo.scripts.update(scriptId, { videoStatus: "rejected" });
       await answerCallbackQuery(callbackQueryId, "Video rejected.");
       await editMessageAfterAction(messageId, "reject", script.title);
     } else if (action === "regenerate") {
-      updateScript(scriptId, {
+      await repo.scripts.update(scriptId, {
         videoStatus: "idle",
         videoJobId: undefined,
         videoUrl: undefined,

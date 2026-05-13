@@ -22,6 +22,24 @@ export function getInstagramProvider(name: ScraperProviderName = getEnv().SCRAPE
 }
 
 /**
+ * Picks a provider that can actually collect profile stats. Manual import is a
+ * storage-only provider, so using it for "Add Creator" leaves followers/views
+ * at zero. When Apify is configured we prefer it for Instagram profile stats;
+ * otherwise we fall back to the user's selected Instagram provider.
+ */
+export function getStatsProviderForPlatform(
+  platform: SocialPlatform,
+  fallback: ScraperProviderName = getEnv().SCRAPER_PROVIDER
+): InstagramScraperProvider {
+  if (platform === "tiktok") return providers.tiktok;
+  if (platform === "youtube_shorts") return providers.youtube;
+  if ((fallback === "manual" || fallback === "meta") && process.env.APIFY_API_TOKEN) {
+    return providers.apify;
+  }
+  return getInstagramProvider(fallback);
+}
+
+/**
  * Picks the best scraper provider for a given content platform. Instagram
  * falls back to the user's globally configured `SCRAPER_PROVIDER`. TikTok and
  * YouTube Shorts always go through their dedicated yt-dlp-based providers.

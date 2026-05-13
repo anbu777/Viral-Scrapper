@@ -3,7 +3,7 @@ import { downloadByUrl } from "./instagram";
 
 export const manualProvider: InstagramScraperProvider = {
   name: "manual",
-  async scrapeCreatorStats(username) {
+  async scrapeCreatorStats() {
     return {
       profilePicUrl: "",
       followers: 0,

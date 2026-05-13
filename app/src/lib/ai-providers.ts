@@ -43,6 +43,7 @@ export async function analyzeWithProvider(input: {
   prompt: string;
   transcript?: string;
   metadataSummary?: string;
+  allowFallback?: boolean;
 }): Promise<VideoAnalysis> {
   const schemaHint = `Return only JSON with keys: hook, summary, transcript, ocrText, visualPattern, pacing, formatPattern, audience, viralMechanics, riskFlags, sourceEvidence.`;
   const prompt = `${schemaHint}\n\nTranscript:\n${input.transcript || ""}\n\nTask:\n${input.prompt}`;
@@ -51,7 +52,8 @@ export async function analyzeWithProvider(input: {
     if (provider === "ollama") return normalizeAnalysis(extractJson(await ollama(prompt)));
     if (provider === "gemini") return normalizeAnalysis(extractJson(await geminiGenerate(input.metadataSummary || input.transcript || "", prompt)));
     return normalizeAnalysis(extractJson(await claudeGenerate(input.metadataSummary || input.transcript || "", prompt)));
-  } catch {
+  } catch (error) {
+    if (!input.allowFallback) throw error;
     return makeFallbackAnalysis(input.transcript, input.metadataSummary);
   }
 }
@@ -64,6 +66,7 @@ export async function generateScriptVariants(input: {
   qualityGateMode: "strict" | "balanced" | "off";
   /** Optional brand / voice context (niche, tone, audience) */
   voiceContext?: string;
+  allowFallback?: boolean;
 }): Promise<GeneratedScriptVariant[]> {
   const variants: GeneratedScriptVariant[] = [];
   const voiceBlock = input.voiceContext?.trim()
@@ -80,8 +83,9 @@ export async function generateScriptVariants(input: {
           ? await geminiGenerate(JSON.stringify(input.analysis), prompt)
           : await claudeGenerate(JSON.stringify(input.analysis), prompt);
       generated = { ...generated, ...extractJson(text), variant };
-    } catch {
-      // Fallback script still gives free mode a usable output package.
+    } catch (error) {
+      if (!input.allowFallback) throw error;
+      // Fallback script still gives free mode a usable output package when explicitly allowed.
     }
     const quality = scoreScript(generated, input.sourceTranscript, input.qualityGateMode);
     variants.push({

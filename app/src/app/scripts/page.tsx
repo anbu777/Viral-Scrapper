@@ -23,7 +23,6 @@ import {
   ExternalLink,
   Play,
   ArrowUpDown,
-  Sparkles,
   Video,
   Loader2,
   Send,
@@ -80,8 +79,9 @@ export default function ScriptsPage() {
         if (list.length > 0) setPickerSelectedAvatar(list[0].id);
       })
       .catch(() => setAvatars([]));
+    const intervals = pollingRefs.current;
     return () => {
-      pollingRefs.current.forEach((interval) => clearInterval(interval));
+      intervals.forEach((interval) => clearInterval(interval));
     };
   }, []);
 

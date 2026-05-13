@@ -43,10 +43,16 @@ function rowToCreator(row: {
   reelsCount30d: number;
   avgViews30d: number;
   lastScrapedAt: string;
+  aliases?: string;
 }): Creator {
-  const platform = (row.platform === "tiktok" || row.platform === "youtube_shorts"
-    ? row.platform
-    : "instagram") as Creator["platform"];
+  // Explicitly recognize valid platforms; everything else falls back to instagram
+  const validPlatforms: string[] = ["tiktok", "youtube_shorts"];
+  const rawPlatform = (row.platform || "").trim();
+  const platform = validPlatforms.includes(rawPlatform)
+    ? (rawPlatform as Creator["platform"])
+    : "instagram";
+  let aliases: string[] = [];
+  try { aliases = row.aliases ? JSON.parse(row.aliases) : []; } catch { /* ignore */ }
   return {
     id: row.id,
     platform,
@@ -57,7 +63,20 @@ function rowToCreator(row: {
     reelsCount30d: row.reelsCount30d,
     avgViews30d: row.avgViews30d,
     lastScrapedAt: row.lastScrapedAt,
+    aliases: aliases.length > 0 ? aliases : undefined,
   };
+}
+
+/** Normalizes a username for fuzzy matching (lowercase, strip @, dots, underscores). */
+export function normalizeUsername(u: string): string {
+  return u.toLowerCase().replace(/^@/, "").replace(/[._-]/g, "");
+}
+
+/** Returns all names a creator could be known by (username + aliases), normalized. */
+export function creatorAllNames(creator: Creator): string[] {
+  const names = [creator.username];
+  if (creator.aliases) names.push(...creator.aliases);
+  return [...new Set(names.map(normalizeUsername))];
 }
 
 function rowToConfig(row: {
@@ -227,6 +246,7 @@ export const repo = {
     },
     async upsert(creator: Creator): Promise<Creator> {
       const platform = creator.platform || "instagram";
+      const aliasesJson = JSON.stringify(creator.aliases || []);
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
         await db.insert(pg.creators).values({
@@ -239,6 +259,7 @@ export const repo = {
           reelsCount30d: creator.reelsCount30d || 0,
           avgViews30d: creator.avgViews30d || 0,
           lastScrapedAt: creator.lastScrapedAt || "",
+          aliases: aliasesJson,
         }).onConflictDoUpdate({
           target: [pg.creators.platform, pg.creators.username],
           set: {
@@ -248,6 +269,7 @@ export const repo = {
             reelsCount30d: creator.reelsCount30d || 0,
             avgViews30d: creator.avgViews30d || 0,
             lastScrapedAt: creator.lastScrapedAt || "",
+            aliases: aliasesJson,
             updatedAt: new Date().toISOString(),
           },
         });
@@ -264,6 +286,7 @@ export const repo = {
         reelsCount30d: creator.reelsCount30d || 0,
         avgViews30d: creator.avgViews30d || 0,
         lastScrapedAt: creator.lastScrapedAt || "",
+        aliases: aliasesJson,
       }).onConflictDoUpdate({
         target: [sqlite.creators.platform, sqlite.creators.username],
         set: {
@@ -273,37 +296,30 @@ export const repo = {
           reelsCount30d: creator.reelsCount30d || 0,
           avgViews30d: creator.avgViews30d || 0,
           lastScrapedAt: creator.lastScrapedAt || "",
+          aliases: aliasesJson,
           updatedAt: new Date().toISOString(),
         },
       }).run();
       return { ...creator, platform };
     },
     async update(id: string, updates: Partial<Creator>): Promise<Creator | undefined> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (updates.platform !== undefined) patch.platform = updates.platform;
+      if (updates.username !== undefined) patch.username = updates.username;
+      if (updates.category !== undefined) patch.category = updates.category;
+      if (updates.profilePicUrl !== undefined) patch.profilePicUrl = updates.profilePicUrl;
+      if (updates.followers !== undefined) patch.followers = updates.followers;
+      if (updates.reelsCount30d !== undefined) patch.reelsCount30d = updates.reelsCount30d;
+      if (updates.avgViews30d !== undefined) patch.avgViews30d = updates.avgViews30d;
+      if (updates.lastScrapedAt !== undefined) patch.lastScrapedAt = updates.lastScrapedAt;
+      if (updates.aliases !== undefined) patch.aliases = JSON.stringify(updates.aliases);
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
-        await db.update(pg.creators).set({
-          username: updates.username,
-          category: updates.category,
-          profilePicUrl: updates.profilePicUrl,
-          followers: updates.followers,
-          reelsCount30d: updates.reelsCount30d,
-          avgViews30d: updates.avgViews30d,
-          lastScrapedAt: updates.lastScrapedAt,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(pg.creators.id, id));
+        await db.update(pg.creators).set(patch as Record<string, never>).where(eq(pg.creators.id, id));
         return (await this.list()).find((c) => c.id === id);
       }
       const db = ensureSqlite();
-      db.update(sqlite.creators).set({
-        username: updates.username,
-        category: updates.category,
-        profilePicUrl: updates.profilePicUrl,
-        followers: updates.followers,
-        reelsCount30d: updates.reelsCount30d,
-        avgViews30d: updates.avgViews30d,
-        lastScrapedAt: updates.lastScrapedAt,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(sqlite.creators.id, id)).run();
+      db.update(sqlite.creators).set(patch as Record<string, never>).where(eq(sqlite.creators.id, id)).run();
       return (await this.list()).find((c) => c.id === id);
     },
     async delete(id: string): Promise<void> {
@@ -612,42 +628,26 @@ export const repo = {
       return script;
     },
     async update(id: string, updates: Partial<Script>): Promise<Script | undefined> {
+      const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if ("starred" in updates) patch.starred = updates.starred;
+      if ("videoJobId" in updates) patch.videoJobId = updates.videoJobId ?? null;
+      if ("videoStatus" in updates) patch.videoStatus = updates.videoStatus ?? null;
+      if ("videoUrl" in updates) patch.videoUrl = updates.videoUrl ?? null;
+      if ("geminiCheck" in updates) patch.geminiCheck = updates.geminiCheck ?? null;
+      if ("claudeCheck" in updates) patch.claudeCheck = updates.claudeCheck ?? null;
+      if ("imagePrompt" in updates) patch.imagePrompt = updates.imagePrompt ?? null;
+      if ("videoPrompt" in updates) patch.videoPrompt = updates.videoPrompt ?? null;
+      if ("avatarId" in updates) patch.avatarId = updates.avatarId ?? null;
+      if ("generatedImageUrl" in updates) patch.generatedImageUrl = updates.generatedImageUrl ?? null;
+      if ("videoMode" in updates) patch.videoMode = updates.videoMode ?? null;
+      if ("videoProvider" in updates) patch.videoProvider = updates.videoProvider ?? null;
+      if ("sourceVideoUrl" in updates) patch.sourceVideoUrl = updates.sourceVideoUrl ?? null;
       if (isPostgresMode()) {
         const db = await getPgDrizzle();
-        await db.update(pg.scripts).set({
-          starred: updates.starred,
-          videoJobId: updates.videoJobId,
-          videoStatus: updates.videoStatus,
-          videoUrl: updates.videoUrl,
-          geminiCheck: updates.geminiCheck,
-          claudeCheck: updates.claudeCheck,
-          imagePrompt: updates.imagePrompt,
-          videoPrompt: updates.videoPrompt,
-          avatarId: updates.avatarId,
-          generatedImageUrl: updates.generatedImageUrl,
-          videoMode: updates.videoMode,
-          videoProvider: updates.videoProvider,
-          sourceVideoUrl: updates.sourceVideoUrl,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(pg.scripts.id, id));
+        await db.update(pg.scripts).set(patch as Record<string, never>).where(eq(pg.scripts.id, id));
         return (await this.list()).find((s) => s.id === id);
       }
-      ensureSqlite().update(sqlite.scripts).set({
-        starred: updates.starred,
-        videoJobId: updates.videoJobId,
-        videoStatus: updates.videoStatus,
-        videoUrl: updates.videoUrl,
-        geminiCheck: updates.geminiCheck,
-        claudeCheck: updates.claudeCheck,
-        imagePrompt: updates.imagePrompt,
-        videoPrompt: updates.videoPrompt,
-        avatarId: updates.avatarId,
-        generatedImageUrl: updates.generatedImageUrl,
-        videoMode: updates.videoMode,
-        videoProvider: updates.videoProvider,
-        sourceVideoUrl: updates.sourceVideoUrl,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(sqlite.scripts.id, id)).run();
+      ensureSqlite().update(sqlite.scripts).set(patch as Record<string, never>).where(eq(sqlite.scripts.id, id)).run();
       return (await this.list()).find((s) => s.id === id);
     },
     async delete(id: string): Promise<void> {

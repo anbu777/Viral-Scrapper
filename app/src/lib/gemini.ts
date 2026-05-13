@@ -124,7 +124,18 @@ export async function analyzeVideo(
       }
 
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const candidate = data.candidates?.[0];
+      // Detect safety/recitation blocks
+      if (!candidate || candidate.finishReason === "SAFETY" || candidate.finishReason === "RECITATION") {
+        const reason = candidate?.finishReason || "NO_CANDIDATES";
+        console.warn(`[gemini] Response blocked: finishReason=${reason}`);
+        if (attempt < maxRetries - 1) {
+          await new Promise((r) => setTimeout(r, 5000));
+          continue;
+        }
+        return ""; // Return empty — caller handles this as safety block
+      }
+      const text = candidate.content?.parts?.[0]?.text || "";
       return stripMarkdownPreamble(text);
     } catch (error) {
       if (attempt < maxRetries - 1) {

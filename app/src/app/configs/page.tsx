@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Settings2, Sparkles, Search, Users, Film } from "lucide-react";
+import { ConfigListSkeleton } from "@/components/ui/loading-skeleton";
 import type { Config, Creator, Video } from "@/lib/types";
 
 const emptyConfig = {
@@ -30,15 +31,18 @@ export default function ConfigsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Config | null>(null);
   const [form, setForm] = useState(emptyConfig);
+  const [loading, setLoading] = useState(true);
 
   const loadConfigs = () => {
     fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])).catch(() => {});
   };
 
   useEffect(() => {
-    loadConfigs();
-    fetch("/api/creators").then((r) => r.json()).then((d) => setCreators(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch("/api/videos").then((r) => r.json()).then((d) => setVideos(Array.isArray(d) ? d : [])).catch(() => {});
+    Promise.all([
+      fetch("/api/configs").then((r) => r.json()).then((d) => setConfigs(Array.isArray(d) ? d : [])),
+      fetch("/accounts-data").then((r) => r.json()).then((d) => setCreators(Array.isArray(d) ? d : [])),
+      fetch("/api/videos").then((r) => r.json()).then((d) => setVideos(Array.isArray(d) ? d : [])),
+    ]).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const openNew = () => {
@@ -159,6 +163,9 @@ export default function ConfigsPage() {
       </div>
 
       {/* Config Cards */}
+      {loading ? (
+        <ConfigListSkeleton />
+      ) : (
       <div className="grid gap-4">
         {configs.map((config) => {
           const creatorCount = creators.filter((c) => c.category === config.creatorsCategory).length;

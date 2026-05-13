@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateScript, readScripts } from "@/lib/csv";
+import { repo } from "@/db/repositories";
 
 export async function POST(
   req: NextRequest,
@@ -13,22 +13,22 @@ export async function POST(
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  const scripts = readScripts();
+  const scripts = await repo.scripts.list();
   const script = scripts.find((s) => s.id === id);
   if (!script) return NextResponse.json({ error: "Script not found" }, { status: 404 });
 
   if (action === "approve") {
-    updateScript(id, { videoStatus: "approved" });
+    await repo.scripts.update(id, { videoStatus: "approved" });
     return NextResponse.json({ ok: true, status: "approved" });
   }
 
   if (action === "reject") {
-    updateScript(id, { videoStatus: "rejected" });
+    await repo.scripts.update(id, { videoStatus: "rejected" });
     return NextResponse.json({ ok: true, status: "rejected" });
   }
 
   if (action === "regenerate") {
-    updateScript(id, {
+    await repo.scripts.update(id, {
       videoStatus: "idle",
       videoJobId: undefined,
       videoUrl: undefined,

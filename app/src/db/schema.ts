@@ -16,6 +16,7 @@ export const creators = sqliteTable("creators", {
   reelsCount30d: integer("reels_count_30d").notNull().default(0),
   avgViews30d: integer("avg_views_30d").notNull().default(0),
   lastScrapedAt: text("last_scraped_at").notNull().default(""),
+  aliases: text("aliases").notNull().default("[]"),
   ...timestamps,
 }, (table) => ({
   uniqCreator: uniqueIndex("creators_platform_username_idx").on(table.platform, table.username),
