@@ -424,8 +424,8 @@ export function CreatorsClient({ initialCreators }: { initialCreators: Creator[]
               {/* Footer: last scraped + view videos */}
               <div className="mt-3 flex items-center justify-between">
                 {creator.lastScrapedAt ? (
-                  <p className="text-[10px] text-muted-foreground/60">
-                    Scraped {new Date(creator.lastScrapedAt).toLocaleDateString()}
+                  <p className="text-[10px] text-muted-foreground/60" suppressHydrationWarning>
+                    Scraped {new Date(creator.lastScrapedAt).toLocaleDateString("en-US")}
                   </p>
                 ) : <span />}
                 <Link

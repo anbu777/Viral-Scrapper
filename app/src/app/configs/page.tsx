@@ -240,6 +240,7 @@ export default function ConfigsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
