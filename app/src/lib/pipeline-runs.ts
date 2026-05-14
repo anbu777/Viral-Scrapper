@@ -75,6 +75,19 @@ async function analyzeOneVideo(
   config: { analysisInstruction: string; newConceptsInstruction: string },
   params: PipelineParams
 ): Promise<void> {
+  // Guard: skip profile/channel page URLs — these are not individual videos
+  // e.g. instagram.com/user/reels/, youtube.com/@user/shorts, tiktok.com/@user
+  const isProfileUrl = /\/(reels|shorts|videos)\/?$|@[^/]+\/?$/.test(video.link || "");
+  if (isProfileUrl || !video.link || !video.link.startsWith("http")) {
+    console.warn(`[pipeline] Skipping non-video URL: ${video.link}`);
+    await repo.videos.update(video.id, { analysisStatus: "failed" });
+    await repo.runs.addError(runId, {
+      code: "VALIDATION_ERROR",
+      message: `Skipped: URL is a profile/channel page, not an individual video: ${video.link}`,
+      target: video.link,
+    });
+    return;
+  }
   const videoPlatform = (video.platform as "instagram" | "tiktok" | "youtube_shorts" | undefined) || "instagram";
   const provider = videoPlatform === "instagram"
     ? getInstagramProvider(params.scraperProvider)
@@ -171,6 +184,7 @@ async function analyzeOneVideo(
         prompt: config.analysisInstruction,
         transcript,
         metadataSummary: `@${video.creator}, ${video.views} views, ${video.likes} likes, caption: ${video.caption || ""}`,
+        allowFallback: true,
       });
       analysisStatus = "fallback";
       if (config.newConceptsInstruction.trim()) {

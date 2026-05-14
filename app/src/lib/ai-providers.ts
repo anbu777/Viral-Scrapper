@@ -22,10 +22,14 @@ async function ollama(prompt: string) {
 }
 
 function extractJson(text: string) {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
+  // Strip markdown fences
+  const cleaned = text.replace(/```(?:json)?\s*/g, "").replace(/```\s*/g, "");
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("AI response did not contain JSON");
-  return JSON.parse(text.slice(start, end + 1));
+  // Fix trailing commas before } or ]
+  const jsonStr = cleaned.slice(start, end + 1).replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(jsonStr);
 }
 
 /**
