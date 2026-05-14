@@ -112,14 +112,14 @@ export const youtubeProvider: InstagramScraperProvider = {
     if (!(await isYtdlpAvailable())) {
       throw new ProviderError("PROVIDER_AUTH", "yt-dlp is required for the YouTube Shorts provider.");
     }
-    // Try /shorts tab first, fall back to /videos tab if 404
-    let items: Awaited<ReturnType<typeof listChannelVideos>>;
+    // Try /shorts tab first, fall back to /videos tab, then channel root, then return []
+    let items: Awaited<ReturnType<typeof listChannelVideos>> = [];
     const shortsUrl = channelShortsUrl(input.username);
     try {
       items = await listChannelVideos(shortsUrl, Math.max(input.maxVideos, 6), true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // 404 on /shorts tab is common for some channels — try /videos tab
+      // 404 / "Unable to download API page" is common for some channels — try fallbacks
       if (/404|not found|unable to download api page/i.test(msg)) {
         console.warn(`[youtube-provider] /shorts tab 404 for "${input.username}", trying /videos tab`);
         const videosUrl = shortsUrl.replace(/\/shorts$/, "/videos");
@@ -129,8 +129,15 @@ export const youtubeProvider: InstagramScraperProvider = {
           const msg2 = err2 instanceof Error ? err2.message : String(err2);
           // Last resort: try channel root
           console.warn(`[youtube-provider] /videos tab also failed for "${input.username}", trying channel root: ${msg2}`);
-          const rootUrl = shortsUrl.replace(/\/shorts$/, "");
-          items = await listChannelVideos(rootUrl, Math.max(input.maxVideos, 6), true);
+          try {
+            const rootUrl = shortsUrl.replace(/\/shorts$/, "");
+            items = await listChannelVideos(rootUrl, Math.max(input.maxVideos, 6), true);
+          } catch (err3) {
+            // All fallbacks exhausted — log and return empty (don't crash the pipeline)
+            const msg3 = err3 instanceof Error ? err3.message : String(err3);
+            console.warn(`[youtube-provider] All URL variants failed for "${input.username}", returning empty: ${msg3}`);
+            return [];
+          }
         }
       } else {
         throw err;

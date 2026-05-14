@@ -1,6 +1,14 @@
 import { z } from "zod";
 import type { GeneratedScriptVariant, QualityScore, ScriptVariant, VideoAnalysis } from "@/lib/types";
 
+// Helper: coerce any value to a string — joins arrays, stringifies objects
+const coerceString = z.preprocess((val) => {
+  if (typeof val === "string") return val;
+  if (Array.isArray(val)) return val.map(String).join("\n");
+  if (val === null || val === undefined) return "";
+  return String(val);
+}, z.string());
+
 // Helper: coerce a value to string array — handles string, null, undefined, object
 const coerceStringArray = z.preprocess((val) => {
   if (Array.isArray(val)) return val.map(String);
@@ -9,14 +17,14 @@ const coerceStringArray = z.preprocess((val) => {
 }, z.array(z.string()));
 
 export const VideoAnalysisSchema = z.object({
-  hook: z.string().default(""),
-  summary: z.string().default(""),
-  transcript: z.string().default(""),
-  ocrText: z.string().default(""),
-  visualPattern: z.string().default(""),
-  pacing: z.string().default(""),
-  formatPattern: z.string().default(""),
-  audience: z.string().default(""),
+  hook: coerceString.default(""),
+  summary: coerceString.default(""),
+  transcript: coerceString.default(""),
+  ocrText: coerceString.default(""),
+  visualPattern: coerceString.default(""),
+  pacing: coerceString.default(""),
+  formatPattern: coerceString.default(""),
+  audience: coerceString.default(""),
   viralMechanics: coerceStringArray.default([]),
   riskFlags: coerceStringArray.default([]),
   sourceEvidence: coerceStringArray.default([]),

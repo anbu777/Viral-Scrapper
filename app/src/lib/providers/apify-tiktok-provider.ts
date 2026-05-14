@@ -79,10 +79,14 @@ async function callApifyTiktok(input: Record<string, unknown>): Promise<ApifyTik
 
 function videoToReel(video: ApifyTiktokVideo, fallbackUsername: string): ScrapedReel {
   const username = video.authorMeta?.name || fallbackUsername;
+  const videoId = video.id || "";
+  // Build canonical URL — only use constructed URL if we have a valid video ID
+  const sourcePostUrl = video.webVideoUrl ||
+    (videoId ? `https://www.tiktok.com/@${username}/video/${videoId}` : "");
   return {
     platform: "tiktok",
-    sourcePostUrl: video.webVideoUrl || `https://www.tiktok.com/@${username}/video/${video.id}`,
-    shortcode: video.id || "",
+    sourcePostUrl,
+    shortcode: videoId,
     creatorUsername: username.replace(/^@/, ""),
     caption: video.text || "",
     thumbnailUrl: video.videoMeta?.coverUrl || "",
