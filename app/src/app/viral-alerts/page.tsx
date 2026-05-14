@@ -16,7 +16,6 @@ import {
   Loader2,
   CheckCircle2,
   X,
-  ExternalLink,
   Play,
   Eye,
   Heart,
@@ -26,6 +25,8 @@ import {
   Instagram,
   Music2,
   Youtube,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { VideoThumbnail } from "@/components/avatar-placeholder";
@@ -65,15 +66,48 @@ export default function ViralAlertsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "unseen" | "instagram" | "tiktok" | "youtube_shorts">("all");
   const [running, setRunning] = useState(false);
+  const [schedulerEnabled, setSchedulerEnabled] = useState<boolean | null>(null);
+  const [togglingScheduler, setTogglingScheduler] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/scheduler/alerts");
-      const data = (await res.json()) as AlertWithVideo[];
+      const [alertsRes, schedulerRes] = await Promise.all([
+        fetch("/api/scheduler/alerts"),
+        fetch("/api/scheduler"),
+      ]);
+      const data = (await alertsRes.json()) as AlertWithVideo[];
       setAlerts(Array.isArray(data) ? data : []);
+      const schedulerData = await schedulerRes.json() as { status?: { enabledJobs?: number; totalJobs?: number } };
+      const totalJobs = schedulerData.status?.totalJobs ?? 0;
+      const enabledJobs = schedulerData.status?.enabledJobs ?? 0;
+      setSchedulerEnabled(totalJobs === 0 ? false : enabledJobs > 0);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleScheduler = async () => {
+    setTogglingScheduler(true);
+    try {
+      const newEnabled = !schedulerEnabled;
+      const res = await fetch("/api/scheduler", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: newEnabled }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle scheduler");
+      setSchedulerEnabled(newEnabled);
+      toast.success(
+        newEnabled ? "Auto-scraping enabled" : "Auto-scraping disabled",
+        newEnabled
+          ? "Scheduler will check creators on their configured intervals"
+          : "Scheduler paused — use Check Now for manual checks"
+      );
+    } catch {
+      toast.error("Failed to toggle scheduler");
+    } finally {
+      setTogglingScheduler(false);
     }
   };
 
@@ -154,6 +188,30 @@ export default function ViralAlertsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Scheduler enable/disable toggle */}
+          <Button
+            onClick={toggleScheduler}
+            disabled={togglingScheduler || schedulerEnabled === null}
+            variant="ghost"
+            className={`rounded-xl glass border-white/[0.08] gap-1.5 ${
+              schedulerEnabled
+                ? "border-neon/25 bg-neon/5 text-neon"
+                : "text-muted-foreground"
+            }`}
+          >
+            {togglingScheduler ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : schedulerEnabled ? (
+              <Power className="h-3.5 w-3.5" />
+            ) : (
+              <PowerOff className="h-3.5 w-3.5" />
+            )}
+            {schedulerEnabled === null
+              ? "Loading…"
+              : schedulerEnabled
+                ? "Auto-Scraping ON"
+                : "Auto-Scraping OFF"}
+          </Button>
           <Button
             onClick={triggerTick}
             disabled={running}
@@ -207,18 +265,26 @@ export default function ViralAlertsPage() {
           <Flame className="mx-auto h-10 w-10 text-muted-foreground/30" />
           <h3 className="mt-4 font-semibold">No viral alerts yet</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure auto-scraping in Settings, then alerts will appear here as your tracked creators post viral content.
+            {schedulerEnabled
+              ? "Auto-scraping is active. Alerts will appear here when tracked creators post viral content."
+              : "Enable auto-scraping to automatically detect viral content, or use Check Now for a manual check."}
           </p>
           <div className="mt-4 flex gap-2 justify-center">
-            <Link href="/settings">
-              <Button className="rounded-xl bg-neon text-black hover:bg-neon/90 border-0 gap-2 font-semibold">
-                <Settings className="h-4 w-4" />
-                Configure Schedule
-              </Button>
-            </Link>
+            <Button
+              onClick={toggleScheduler}
+              disabled={togglingScheduler}
+              className={`rounded-xl border-0 gap-2 font-semibold ${
+                schedulerEnabled
+                  ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                  : "bg-neon text-black hover:bg-neon/90"
+              }`}
+            >
+              {schedulerEnabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+              {schedulerEnabled ? "Disable Auto-Scraping" : "Enable Auto-Scraping"}
+            </Button>
             <Button onClick={triggerTick} variant="outline" className="rounded-xl gap-2 glass border-white/[0.08]">
               <Sparkles className="h-4 w-4" />
-              Run Now
+              Check Now
             </Button>
           </div>
         </div>

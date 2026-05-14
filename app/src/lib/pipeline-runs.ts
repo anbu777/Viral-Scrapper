@@ -89,6 +89,12 @@ async function analyzeOneVideo(
     });
     return;
   }
+
+  // Guard: skip already-analyzed videos (status "ok") to avoid redundant Gemini calls
+  if (video.analysisStatus === "ok" && video.analysisJson && params.skipScraping !== true) {
+    console.log(`[pipeline] Skipping already-analyzed video: ${video.link}`);
+    return;
+  }
   const videoPlatform = (video.platform as "instagram" | "tiktok" | "youtube_shorts" | undefined) || "instagram";
   const provider = videoPlatform === "instagram"
     ? getInstagramProvider(params.scraperProvider)
