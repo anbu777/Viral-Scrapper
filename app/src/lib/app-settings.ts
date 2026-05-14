@@ -160,6 +160,22 @@ export async function getProviderSettings(forceRefresh = false): Promise<Provide
   const defaults = getDefaultsFromEnv();
   const stored = await repo.settings.get<Partial<ProviderSettings>>(SETTINGS_KEY);
 
+  // Sanitize stored.schedule scalar fields — older buggy clients may have written
+  // empty objects ({}) where a number was expected (viralThreshold, minViews).
+  const storedSchedule = (stored?.schedule || {}) as Record<string, unknown>;
+  const safeSchedule = {
+    ...defaults.schedule,
+    ...storedSchedule,
+    viralThreshold:
+      typeof storedSchedule.viralThreshold === "number"
+        ? storedSchedule.viralThreshold
+        : defaults.schedule.viralThreshold,
+    minViews:
+      typeof storedSchedule.minViews === "number"
+        ? storedSchedule.minViews
+        : defaults.schedule.minViews,
+  };
+
   // Deep merge stored over defaults so partial settings don't lose other fields
   const merged: ProviderSettings = {
     scraping: { ...defaults.scraping, ...(stored?.scraping || {}) },
@@ -167,7 +183,7 @@ export async function getProviderSettings(forceRefresh = false): Promise<Provide
     tts: { ...defaults.tts, ...(stored?.tts || {}) },
     video: { ...defaults.video, ...(stored?.video || {}) },
     notifications: { ...defaults.notifications, ...(stored?.notifications || {}) },
-    schedule: { ...defaults.schedule, ...(stored?.schedule || {}) },
+    schedule: safeSchedule,
   };
 
   cachedSettings = merged;

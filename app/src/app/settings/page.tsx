@@ -82,11 +82,37 @@ export default function SettingsPage() {
     setSettings((prev) => {
       if (!prev) return prev;
       const sectionData = prev[section] as Record<string, unknown>;
+      const existing = sectionData[subsection as string];
+      // Merge if existing is an object; replace otherwise (scalars like number/string).
+      const merged =
+        existing !== null && typeof existing === "object" && !Array.isArray(existing)
+          ? { ...(existing as object), ...(value as object) }
+          : (value as unknown);
       return {
         ...prev,
         [section]: {
           ...sectionData,
-          [subsection]: { ...(sectionData[subsection as string] as object), ...value },
+          [subsection]: merged,
+        },
+      };
+    });
+    setSaved(false);
+  };
+
+  // Helper for scalar fields nested directly under a section (e.g. schedule.viralThreshold)
+  const updateScalar = <K extends keyof ProviderSettings, F extends keyof ProviderSettings[K]>(
+    section: K,
+    field: F,
+    value: ProviderSettings[K][F]
+  ) => {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const sectionData = prev[section] as Record<string, unknown>;
+      return {
+        ...prev,
+        [section]: {
+          ...sectionData,
+          [field]: value,
         },
       };
     });
@@ -242,7 +268,7 @@ export default function SettingsPage() {
             setShowSecrets={setShowSecrets}
           />
         )}
-        {activeTab === "schedule" && <ScheduleTab settings={settings} updateNested={updateNested} />}
+        {activeTab === "schedule" && <ScheduleTab settings={settings} updateNested={updateNested} updateScalar={updateScalar} />}
       </div>
     </div>
   );
@@ -767,12 +793,18 @@ function NotificationsTab({ settings, updateNested, test, testResults, testing, 
 function ScheduleTab({
   settings,
   updateNested,
+  updateScalar,
 }: {
   settings: ProviderSettings;
   updateNested: <K extends keyof ProviderSettings, S extends keyof ProviderSettings[K]>(
     section: K,
     subsection: S,
     value: Partial<ProviderSettings[K][S]>
+  ) => void;
+  updateScalar: <K extends keyof ProviderSettings, F extends keyof ProviderSettings[K]>(
+    section: K,
+    field: F,
+    value: ProviderSettings[K][F]
   ) => void;
 }) {
   const platforms = [
@@ -841,12 +873,12 @@ function ScheduleTab({
               step={0.1}
               min={1}
               max={10}
-              value={settings.schedule.viralThreshold}
-              onChange={(e) => updateNested("schedule", "viralThreshold", Number(e.target.value) as never)}
+              value={typeof settings.schedule.viralThreshold === "number" ? settings.schedule.viralThreshold : 2}
+              onChange={(e) => updateScalar("schedule", "viralThreshold", Number(e.target.value))}
               className="mt-1.5 rounded-xl glass border-white/[0.08] h-10"
             />
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Video flagged viral when views &gt; {settings.schedule.viralThreshold}× creator&apos;s avg views
+              Video flagged viral when views &gt; {typeof settings.schedule.viralThreshold === "number" ? settings.schedule.viralThreshold : 2}× creator&apos;s avg views
             </p>
           </div>
           <div>
@@ -854,8 +886,8 @@ function ScheduleTab({
             <Input
               type="number"
               min={0}
-              value={settings.schedule.minViews}
-              onChange={(e) => updateNested("schedule", "minViews", Number(e.target.value) as never)}
+              value={typeof settings.schedule.minViews === "number" ? settings.schedule.minViews : 10000}
+              onChange={(e) => updateScalar("schedule", "minViews", Number(e.target.value))}
               className="mt-1.5 rounded-xl glass border-white/[0.08] h-10"
             />
           </div>
