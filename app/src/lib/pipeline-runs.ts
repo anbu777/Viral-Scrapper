@@ -7,6 +7,7 @@ import { getInstagramProvider, getProviderForPlatform, logProviderCall } from "@
 import { classifyProviderError } from "@/lib/providers/errors";
 import { calculateViralityScore } from "@/lib/ranking";
 import { analyzeWithProvider, generateScriptVariants } from "@/lib/ai-providers";
+import { makeFallbackAnalysis } from "@/lib/quality";
 import { uploadVideo, generateNewConcepts, pingGemini } from "@/lib/gemini";
 import { analyzeVideoToStructuredJson, transcribeVideoWithGemini } from "@/lib/gemini-json-analysis";
 import { withBackoff } from "@/lib/retry";
@@ -163,9 +164,10 @@ async function analyzeOneVideo(
 
         if (config.newConceptsInstruction.trim()) {
           try {
-            conceptsFromVideo = await withBackoff(() =>
+            const rawConcepts = await withBackoff(() =>
               generateNewConcepts(JSON.stringify(analysisFromVideo), config.newConceptsInstruction)
             );
+            conceptsFromVideo = typeof rawConcepts === "string" ? rawConcepts : "";
           } catch {
             conceptsFromVideo = "";
           }
@@ -189,18 +191,26 @@ async function analyzeOneVideo(
       analysisStatus = "fallback";
       if (config.newConceptsInstruction.trim()) {
         try {
-          newConceptsText = await generateNewConcepts(JSON.stringify(analysis), config.newConceptsInstruction);
+          const raw = await generateNewConcepts(JSON.stringify(analysis), config.newConceptsInstruction);
+          newConceptsText = typeof raw === "string" ? raw : "";
         } catch {
           newConceptsText = "";
         }
       }
     }
 
+    // Ensure all values are safe for SQLite before saving
+    const safeAnalysis = analysis || makeFallbackAnalysis("", "Analysis unavailable");
+    const safeTranscript = typeof (safeAnalysis.transcript || transcript) === "string"
+      ? (safeAnalysis.transcript || transcript)
+      : "";
+    const safeNewConcepts = typeof newConceptsText === "string" ? newConceptsText : "";
+
     await repo.videos.update(video.id, {
-      analysis: JSON.stringify(analysis, null, 2),
-      analysisJson: analysis,
-      transcript: analysis.transcript || transcript,
-      newConcepts: newConceptsText,
+      analysis: JSON.stringify(safeAnalysis, null, 2),
+      analysisJson: safeAnalysis,
+      transcript: safeTranscript,
+      newConcepts: safeNewConcepts,
       analysisStatus,
     });
     await repo.analysisRuns.update(analysisRunId, {

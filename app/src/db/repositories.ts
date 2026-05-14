@@ -525,11 +525,11 @@ export const repo = {
       if (updates.views !== undefined) patch.views = updates.views;
       if (updates.likes !== undefined) patch.likes = updates.likes;
       if (updates.comments !== undefined) patch.comments = updates.comments;
-      if (updates.analysis !== undefined) patch.analysis = updates.analysis;
+      if (updates.analysis !== undefined) patch.analysis = typeof updates.analysis === "string" ? updates.analysis : JSON.stringify(updates.analysis ?? "");
       if (updates.analysisJson !== undefined) patch.analysisJson = stringifyJson(updates.analysisJson);
-      if (updates.newConcepts !== undefined) patch.newConcepts = updates.newConcepts;
+      if (updates.newConcepts !== undefined) patch.newConcepts = typeof updates.newConcepts === "string" ? updates.newConcepts : String(updates.newConcepts ?? "");
       if (updates.starred !== undefined) patch.starred = updates.starred;
-      if (updates.transcript !== undefined) patch.transcript = updates.transcript;
+      if (updates.transcript !== undefined) patch.transcript = typeof updates.transcript === "string" ? updates.transcript : String(updates.transcript ?? "");
       if (updates.videoFileUrl !== undefined) patch.videoFileUrl = updates.videoFileUrl;
       if (updates.viralityScore !== undefined) patch.viralityScore = updates.viralityScore;
       if (updates.rankingReason !== undefined) patch.rankingReason = updates.rankingReason;
