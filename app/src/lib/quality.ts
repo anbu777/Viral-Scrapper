@@ -1,6 +1,13 @@
 import { z } from "zod";
 import type { GeneratedScriptVariant, QualityScore, ScriptVariant, VideoAnalysis } from "@/lib/types";
 
+// Helper: coerce a value to string array — handles string, null, undefined, object
+const coerceStringArray = z.preprocess((val) => {
+  if (Array.isArray(val)) return val.map(String);
+  if (typeof val === "string" && val.trim()) return [val];
+  return [];
+}, z.array(z.string()));
+
 export const VideoAnalysisSchema = z.object({
   hook: z.string().default(""),
   summary: z.string().default(""),
@@ -10,9 +17,9 @@ export const VideoAnalysisSchema = z.object({
   pacing: z.string().default(""),
   formatPattern: z.string().default(""),
   audience: z.string().default(""),
-  viralMechanics: z.array(z.string()).default([]),
-  riskFlags: z.array(z.string()).default([]),
-  sourceEvidence: z.array(z.string()).default([]),
+  viralMechanics: coerceStringArray.default([]),
+  riskFlags: coerceStringArray.default([]),
+  sourceEvidence: coerceStringArray.default([]),
 });
 
 export const ScriptVariantSchema = z.object({

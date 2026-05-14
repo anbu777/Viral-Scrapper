@@ -30,11 +30,14 @@ function channelShortsUrl(usernameOrChannel: string): string {
 }
 
 function metadataToReel(meta: YtdlpMetadata, fallbackUsername: string): ScrapedReel {
-  const sourcePostUrl = meta.id ? `https://www.youtube.com/shorts/${meta.id}` : meta.url;
+  const videoId = meta.id || "";
+  const sourcePostUrl = videoId
+    ? `https://www.youtube.com/shorts/${videoId}`
+    : (meta.url && meta.url.startsWith("http") ? meta.url : "");
   return {
     platform: "youtube_shorts",
     sourcePostUrl,
-    shortcode: meta.id,
+    shortcode: videoId,
     creatorUsername: (meta.uploader || fallbackUsername).replace(/^@/, ""),
     caption: meta.title || meta.description || "",
     thumbnailUrl: meta.thumbnail || "",
@@ -109,7 +112,30 @@ export const youtubeProvider: InstagramScraperProvider = {
     if (!(await isYtdlpAvailable())) {
       throw new ProviderError("PROVIDER_AUTH", "yt-dlp is required for the YouTube Shorts provider.");
     }
-    const items = await listChannelVideos(channelShortsUrl(input.username), Math.max(input.maxVideos, 6), true);
+    // Try /shorts tab first, fall back to /videos tab if 404
+    let items: Awaited<ReturnType<typeof listChannelVideos>>;
+    const shortsUrl = channelShortsUrl(input.username);
+    try {
+      items = await listChannelVideos(shortsUrl, Math.max(input.maxVideos, 6), true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // 404 on /shorts tab is common for some channels — try /videos tab
+      if (/404|not found|unable to download api page/i.test(msg)) {
+        console.warn(`[youtube-provider] /shorts tab 404 for "${input.username}", trying /videos tab`);
+        const videosUrl = shortsUrl.replace(/\/shorts$/, "/videos");
+        try {
+          items = await listChannelVideos(videosUrl, Math.max(input.maxVideos, 6), true);
+        } catch (err2) {
+          const msg2 = err2 instanceof Error ? err2.message : String(err2);
+          // Last resort: try channel root
+          console.warn(`[youtube-provider] /videos tab also failed for "${input.username}", trying channel root: ${msg2}`);
+          const rootUrl = shortsUrl.replace(/\/shorts$/, "");
+          items = await listChannelVideos(rootUrl, Math.max(input.maxVideos, 6), true);
+        }
+      } else {
+        throw err;
+      }
+    }
     const reels = items.map((m) => metadataToReel(m, input.username));
     return filterByDays(reels, input.nDays).slice(0, input.maxVideos);
   },

@@ -17,6 +17,8 @@ export function classifyProviderError(error: unknown): ProviderErrorCode {
   if (message.includes("token") || message.includes("unauthorized") || message.includes("login")) return "PROVIDER_AUTH";
   if (message.includes("rate") || message.includes("429")) return "RATE_LIMIT";
   if (message.includes("expired") || message.includes("cdn")) return "MEDIA_EXPIRED";
+  // "Unable to download API page" is a yt-dlp channel listing issue, not a private video
+  if (message.includes("unable to download api page")) return "UNKNOWN";
   if (message.includes("private") || message.includes("deleted") || message.includes("404")) return "PRIVATE_OR_DELETED";
   if (message.includes("schema") || message.includes("json") || message.includes("no json object")) return "AI_SCHEMA_INVALID";
   if (message.includes("gemini") || message.includes("ollama") || message.includes("claude")) return "AI_PROVIDER_ERROR";

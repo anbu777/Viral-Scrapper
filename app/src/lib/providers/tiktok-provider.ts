@@ -28,11 +28,19 @@ function tiktokProfileUrl(usernameOrUrl: string) {
 }
 
 function metadataToReel(meta: YtdlpMetadata, fallbackUsername: string): ScrapedReel {
+  // Build a canonical URL — meta.url may be relative or missing for flat-playlist entries
+  const videoId = meta.id || "";
+  const username = (meta.uploader || fallbackUsername).replace(/^@/, "");
+  const sourcePostUrl = meta.url && meta.url.startsWith("http")
+    ? meta.url
+    : videoId
+      ? `https://www.tiktok.com/@${username}/video/${videoId}`
+      : "";
   return {
     platform: "tiktok",
-    sourcePostUrl: meta.url,
-    shortcode: meta.id,
-    creatorUsername: (meta.uploader || fallbackUsername).replace(/^@/, ""),
+    sourcePostUrl,
+    shortcode: videoId,
+    creatorUsername: username,
     caption: meta.title || meta.description || "",
     thumbnailUrl: meta.thumbnail || "",
     videoFileUrl: meta.videoUrl || null,

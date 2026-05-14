@@ -442,6 +442,11 @@ export const repo = {
       rankingReason?: string;
       scoreBreakdown?: Record<string, unknown>;
     }): Promise<Video | undefined> {
+      // Guard: skip videos with no URL (can happen with flat-playlist entries missing IDs)
+      if (!reel.sourcePostUrl || !reel.sourcePostUrl.startsWith("http")) {
+        console.warn(`[upsertScraped] Skipping video with invalid sourcePostUrl: "${reel.sourcePostUrl}" (creator: ${reel.creatorUsername})`);
+        return undefined;
+      }
       const id = options.id || randomUUID();
       const now = new Date().toISOString();
       const cachedThumbnail = await cacheThumbnail(reel.thumbnailUrl, id);
@@ -449,23 +454,23 @@ export const repo = {
         id,
         platform: reel.platform,
         sourcePostUrl: reel.sourcePostUrl,
-        shortcode: reel.shortcode,
+        shortcode: reel.shortcode || "",
         thumbnail: cachedThumbnail,
         creator: reel.creatorUsername,
-        caption: reel.caption,
-        views: reel.views,
-        likes: reel.likes,
-        comments: reel.comments,
+        caption: typeof reel.caption === "string" ? reel.caption : "",
+        views: typeof reel.views === "number" ? reel.views : 0,
+        likes: typeof reel.likes === "number" ? reel.likes : 0,
+        comments: typeof reel.comments === "number" ? reel.comments : 0,
         datePosted: reel.postedAt ? reel.postedAt.slice(0, 10) : "",
         dateAdded: today(),
         configName: options.configName || "",
         scrapeRunId: options.scrapeRunId ?? null,
         provider: options.provider,
         selectedForAnalysis: options.selectedForAnalysis ?? false,
-        duration: reel.durationSeconds ?? null,
-        videoFileUrl: reel.videoFileUrl ?? null,
-        viralityScore: options.viralityScore ?? 0,
-        rankingReason: options.rankingReason ?? "",
+        duration: typeof reel.durationSeconds === "number" ? reel.durationSeconds : null,
+        videoFileUrl: typeof reel.videoFileUrl === "string" ? reel.videoFileUrl : null,
+        viralityScore: typeof options.viralityScore === "number" ? options.viralityScore : 0,
+        rankingReason: typeof options.rankingReason === "string" ? options.rankingReason : "",
         scoreBreakdownJson: stringifyJson(options.scoreBreakdown ?? {}),
         rawProviderPayloadJson: stringifyJson(redactSensitive(reel.rawProviderPayload ?? {})),
       };
