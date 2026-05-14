@@ -285,15 +285,32 @@ interface SecretInputProps {
 }
 
 function SecretInput({ value, onChange, placeholder, show, onToggle }: SecretInputProps) {
+  // Detect if the current value is a masked key returned from the server (contains •)
+  const isMasked = value.includes("•");
+  const displayValue = isMasked && !show ? "" : value;
+  const effectivePlaceholder = isMasked ? "••••••••••••••••  (key saved — type to replace)" : placeholder;
+
   return (
     <div className="relative">
       <Input
         type={show ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="rounded-xl glass border-white/[0.08] h-10 pr-10 font-mono text-xs"
+        value={displayValue}
+        onChange={(e) => {
+          // If user starts typing, replace the masked value with what they type
+          onChange(e.target.value);
+        }}
+        onFocus={() => {
+          // Clear the masked value when user focuses so they can type a new key cleanly
+          if (isMasked) onChange("");
+        }}
+        placeholder={effectivePlaceholder}
+        className={`rounded-xl glass border-white/[0.08] h-10 pr-10 font-mono text-xs ${isMasked ? "border-neon/20 bg-neon/5" : ""}`}
       />
+      {isMasked && !show && (
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-neon/70 pointer-events-none font-mono">
+          ✓ saved
+        </span>
+      )}
       <button
         type="button"
         onClick={onToggle}

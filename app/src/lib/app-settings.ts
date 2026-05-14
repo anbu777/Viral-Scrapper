@@ -176,13 +176,14 @@ export async function getProviderSettings(forceRefresh = false): Promise<Provide
         : defaults.schedule.minViews,
   };
 
-  // Deep merge stored over defaults so partial settings don't lose other fields
+  // Deep merge stored over defaults so partial settings don't lose other fields.
+  // Use deepMergeSkipUndefined so missing/undefined keys in stored don't erase defaults.
   const merged: ProviderSettings = {
-    scraping: { ...defaults.scraping, ...(stored?.scraping || {}) },
-    ai: { ...defaults.ai, ...(stored?.ai || {}) },
-    tts: { ...defaults.tts, ...(stored?.tts || {}) },
-    video: { ...defaults.video, ...(stored?.video || {}) },
-    notifications: { ...defaults.notifications, ...(stored?.notifications || {}) },
+    scraping: deepMergeSkipUndefined(defaults.scraping, (stored?.scraping || {}) as Partial<typeof defaults.scraping>),
+    ai: deepMergeSkipUndefined(defaults.ai, (stored?.ai || {}) as Partial<typeof defaults.ai>),
+    tts: deepMergeSkipUndefined(defaults.tts, (stored?.tts || {}) as Partial<typeof defaults.tts>),
+    video: deepMergeSkipUndefined(defaults.video, (stored?.video || {}) as Partial<typeof defaults.video>),
+    notifications: deepMergeSkipUndefined(defaults.notifications, (stored?.notifications || {}) as Partial<typeof defaults.notifications>),
     schedule: safeSchedule,
   };
 
@@ -192,17 +193,51 @@ export async function getProviderSettings(forceRefresh = false): Promise<Provide
 }
 
 /**
+ * Deep merge two objects, skipping undefined values in the source.
+ * This prevents masked/stripped API keys from overwriting real stored values.
+ */
+function deepMergeSkipUndefined<T extends Record<string, unknown>>(base: T, override: Partial<T>): T {
+  const result = { ...base };
+  for (const key of Object.keys(override) as (keyof T)[]) {
+    const overrideVal = override[key];
+    const baseVal = base[key];
+    if (overrideVal === undefined) {
+      // Skip — don't overwrite real value with undefined (happens when masked key is stripped)
+      continue;
+    }
+    if (
+      overrideVal !== null &&
+      typeof overrideVal === "object" &&
+      !Array.isArray(overrideVal) &&
+      baseVal !== null &&
+      typeof baseVal === "object" &&
+      !Array.isArray(baseVal)
+    ) {
+      // Recurse into nested objects
+      result[key] = deepMergeSkipUndefined(
+        baseVal as Record<string, unknown>,
+        overrideVal as Record<string, unknown>
+      ) as T[keyof T];
+    } else {
+      result[key] = overrideVal as T[keyof T];
+    }
+  }
+  return result;
+}
+
+/**
  * Save provider settings to DB. Invalidates cache so next read returns fresh data.
  */
 export async function saveProviderSettings(settings: Partial<ProviderSettings>): Promise<void> {
   const current = await getProviderSettings(true);
+  // Use deep merge that skips undefined — prevents masked API keys from erasing real stored values
   const merged: ProviderSettings = {
-    scraping: { ...current.scraping, ...(settings.scraping || {}) },
-    ai: { ...current.ai, ...(settings.ai || {}) },
-    tts: { ...current.tts, ...(settings.tts || {}) },
-    video: { ...current.video, ...(settings.video || {}) },
-    notifications: { ...current.notifications, ...(settings.notifications || {}) },
-    schedule: { ...current.schedule, ...(settings.schedule || {}) },
+    scraping: deepMergeSkipUndefined(current.scraping, settings.scraping || {}),
+    ai: deepMergeSkipUndefined(current.ai, settings.ai || {}),
+    tts: deepMergeSkipUndefined(current.tts, settings.tts || {}),
+    video: deepMergeSkipUndefined(current.video, settings.video || {}),
+    notifications: deepMergeSkipUndefined(current.notifications, settings.notifications || {}),
+    schedule: deepMergeSkipUndefined(current.schedule as unknown as Record<string, unknown>, settings.schedule || {}) as ProviderSettings["schedule"],
   };
   await repo.settings.set(SETTINGS_KEY, merged);
   cachedSettings = merged;
